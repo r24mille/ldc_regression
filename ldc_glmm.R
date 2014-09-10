@@ -1,6 +1,5 @@
 library(lme4)
 
-
 # Load SmartMeterReading data from CSV
 home <- setwd(Sys.getenv("HOME"))
 fpath <- file.path(home, 
@@ -9,30 +8,49 @@ fpath <- file.path(home,
 readings <- read.csv(fpath)
 
 # Re-orders TOU Period levels so that graphs are sorted accordingly
-readings$tou_period <- factor(readings$tou_period, c("off_morning", "mid_morning", "on_peak", "mid_evening", "off_evening", "off_weekend"))
+readings$tou_period <- factor(readings$tou_period, c("off_weekend", "off_morning", "mid_morning", "on_peak", "mid_evening", "off_evening"))
 attach(readings)
 
-# Playing with simple linear model
-the_model <- lmer(kwh ~ temperature 
-                  + (1|subject))
-summary(the_model)
-anova(the_model)
-plot(the_model)
+# Null model is just one parameter, the overall mean 
+# (pg. 333 of "The R Book"). 1 is the intercept in 
+# regression models, but here it is the overall mean 
+# (ie. grand mean).
+null_model <- lm(kwh ~ 1, readings)
 
+# The simplest useful equation is:
+#
+# y = a + bx
+#
+# A two-parameter model with one parameter for the 
+# intercept, a, and another for the slope, b, of the graph 
+# of the continuous response variable y against a continuous # explanatory 
+# variable x.
+#
+# Modeled as:
+simple_regression <- glm(kwh ~ temperature)
 
-# Null hypothesis is that TOU billing has no effect
-readings.null = lmer(kwh ~ temperature * tou_period 
-                     + (1+billing_active|subject), 
-                     data = readings, 
-                     REML = FALSE)
-summary(readings.null)
-
-# Alternate hypothesis is that TOU billing has a significant effect
-readings.model <- lmer(kwh ~ temperature * tou_period * billing_active 
-                     + (1+billing_active|subject), 
-                     data = readings, 
-                     REML = FALSE)
-summary(readings.model)
-
-# Analysis of variance
-anova(readings.model)
+# Linear Mixed-Effects Regression
+# Subject is a random effect because its factor levels have no meaning 
+# (ie. convey no information). However, subjects are sampled from 
+# a larger population and differ in many ways but we do not know exactly how.
+# The subject being sampled affects the variance of the result, not the 
+# mean of the result.
+#
+# Further refinement is made for temporal pseudoreplication as described 
+# on pg. 642 of "The R Book". This considers daynum (a continuous random 
+# effect) as pseudoreplication within each subject.
+#
+# lmeControl added as described in 
+# https://stat.ethz.ch/pipermail/r-help/2008-June/164806.html to work around 
+# an error.
+pseudorep_model1 <- lme(kwh~temperature*tou_period, 
+                       random=~hourindex|subject, 
+                       control=lmeControl(opt="optim")
+)
+pseudorep_model2 <- lme(kwh~temperature*tou_period*billing_active, 
+                        random=~hourindex|subject, 
+                        control=lmeControl(opt="optim")
+)
+anova(pseudorep_model1, pseudorep_model2)
+summary(pseudorep_model2)
+plot(pseudorep_model2,subject~fitted(.))
