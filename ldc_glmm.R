@@ -8,7 +8,15 @@ fpath <- file.path(home,
 readings <- read.csv(fpath)
 
 # Re-orders TOU Period levels so that graphs are sorted accordingly
-readings$tou_period <- factor(readings$tou_period, c("off_weekend", "off_morning", "mid_morning", "on_peak", "mid_evening", "off_evening"))
+readings$tou_period <- factor(readings$tou_period, 
+                              c("off_weekend", "off_morning", "mid_morning", 
+                                "on_peak", "mid_evening", "off_evening"))
+
+# Renumbers subjects 1 through n for simplicity.
+meterids <- unique(readings$subject)
+readings$subject_reindexed <- match(readings$subject, meterids)
+
+# Attach to readings data frame to simplify following code.
 attach(readings)
 
 # Null model is just one parameter, the overall mean 
@@ -17,17 +25,10 @@ attach(readings)
 # (ie. grand mean).
 null_model <- lm(kwh ~ 1, readings)
 
-# The simplest useful equation is:
-#
-# y = a + bx
-#
-# A two-parameter model with one parameter for the 
-# intercept, a, and another for the slope, b, of the graph 
-# of the continuous response variable y against a continuous # explanatory 
-# variable x.
-#
-# Modeled as:
-simple_regression <- glm(kwh ~ temperature)
+# Suppose that there are no fixed effects, so that all of the 
+# categorical variables are random effects. Then the fixed 
+# effect simply estimates the intercept (parameter 1):
+
 
 # Linear Mixed-Effects Regression
 # Subject is a random effect because its factor levels have no meaning 
@@ -43,14 +44,7 @@ simple_regression <- glm(kwh ~ temperature)
 # lmeControl added as described in 
 # https://stat.ethz.ch/pipermail/r-help/2008-June/164806.html to work around 
 # an error.
-pseudorep_model1 <- lme(kwh~temperature*tou_period, 
-                       random=~hourindex|subject, 
+pseudorep_model <- lme(kwh~temperature*tou_period, 
+                       random=~hourindex|subject_reindexed, 
                        control=lmeControl(opt="optim")
 )
-pseudorep_model2 <- lme(kwh~temperature*tou_period*billing_active, 
-                        random=~hourindex|subject, 
-                        control=lmeControl(opt="optim")
-)
-anova(pseudorep_model1, pseudorep_model2)
-summary(pseudorep_model2)
-plot(pseudorep_model2,subject~fitted(.))
