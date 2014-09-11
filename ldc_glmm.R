@@ -1,4 +1,5 @@
 library(lme4)
+library(nlme) # groupedData
 library(lattice) # plotting
 
 # Load SmartMeterReading data from CSV
@@ -31,7 +32,7 @@ model.null <- lm(kwh ~ 1, readings)
 # The fixed effect is just the overall mean value of the response variable. The 
 # random effects show the indentities of the random variables and their relative 
 # locations in the hierarchy. The random effects are specified like:
-# random = ~ 1 | subject_reindexed
+# random = ~ 1 | subject
 
 # An important detail to notice is that the name of the response variable (kwh) 
 # is not repeated in the random-effects forumula: there is a blank space to the 
@@ -74,6 +75,13 @@ model.lmer.nofixed.sub.nested.daynum <- lmer(kwh ~ 1 + (1 | subject/daynum),
                                              data = readings)
 summary(model.lmer.nofixed.sub.nested.daynum)
 
+# Fixed effects interraction model with no consideration for pseudoreplication
+model.lmer.fixedinteraction.randomsub <- lmer(kwh ~ temperature*tou_period*billing_active + (1 | subject),
+                                              data = readings,
+                                              RELM=FALSE)
+summary(model.lmer.fixedinteraction.randomsub)
+
+
 # Linear Mixed-Effects Regression
 # Subject is a random effect because its factor levels have no meaning 
 # (ie. convey no information). However, subjects are sampled from 
@@ -89,9 +97,10 @@ summary(model.lmer.nofixed.sub.nested.daynum)
 # groupedData object. Specify the nesting structure of the random effects, and  
 # indicate the fixed effect by defining temperature*tou_period*billing_active 
 # as "outer" to the nesting (ie. a fixed effect):
-#readings <- groupedData(kwh ~ daynum|subject,
+#readings <- groupedData(kwh ~ 1 | subject,
 #                        outer = ~ billing_active, 
 #                        readings)
+#gsummary(readings)
 #plot(readings, outer=T)
 
 # Further refinement is made for temporal pseudoreplication as described 
@@ -101,23 +110,50 @@ summary(model.lmer.nofixed.sub.nested.daynum)
 # lmeControl added as described in 
 # https://stat.ethz.ch/pipermail/r-help/2008-June/164806.html to work around 
 # an error.
-#model.threefixed.psuedorep.hourindex <- lme(fixed = kwh~temperature*tou_period*billing_active, 
-#                                  random = ~hourindex|subject, 
-#                                  control = lmeControl(opt="optim"), 
-#                                  data = readings)
+model.threefixed.psuedorep.hourindex <- lmer(kwh ~ temperature*tou_period*billing_active + (hourindex | subject), 
+                                  data = readings,
+                                  REML=FALSE)
 #model.threefixed.psuedorep.daynum <- lme(fixed = kwh~temperature*tou_period*billing_active, 
 #                                         random = ~daynum|subject, 
 #                                         control = lmeControl(opt="optim"), 
 #                                         data = readings)
-model.threefixed.psuedorep.hourindex.nested.daynum <- lme(fixed = kwh~temperature*tou_period*billing_active, 
-                                                          random = ~hourindex|subject/daynum, 
-                                                          control = lmeControl(opt="optim"), 
-                                                          data = readings)
 
 
-#summary(model.threefixed.psuedorep.hourindex)
+summary(model.threefixed.psuedorep.hourindex) # Lower AIC
 #summary(model.threefixed.psuedorep.daynum)
-summary(model.threefixed.psuedorep.hourindex.nested.daynum) # Lowest AIC
+
+anova(model.lmer.fixedinteraction.randomsub, model.threefixed.psuedorep.hourindex)
+
+# After settling on the pseudoreplication model, check the fit of the model.
+model.ldc.lme <- lme(kwh ~ temperature*tou_period*billing_active,
+                     random = ~ hourindex | subject,
+                     control = lmeControl(opt="optim"),
+                     data = readings)
+model.ldc.lmer <- lmer(kwh ~ temperature*tou_period*billing_active + (hourindex | subject), 
+                       data = readings,
+                       REML=FALSE)
+
+qqline(resid(model.ldc.lmer))
 
 # Time series analysis in mixed-effects models (pg. 699)
-# It 
+# It is common to have repeated measures on subjects in observational studies, 
+# where we expect that the observation on an individual at time t + 1 
+# would be quite strongly correlated with the observation for the same 
+# individual at time t. This violates one of the central assumptions of linear 
+# models, that the within-group errors are independent. However, serial 
+# correlation is often observed in timeseries data.
+#
+# We know from previous work that the fixed effect can be modelled as a 
+# three-parameter sine-cosine function of time x:
+#                  y = a + b sin(2*pi*x) + d cos(2*pi*x) + epsilon_ij
+# and we want to asses different structures for modelling the within-class
+# correlation.
+#
+# Begin by fitting a mixed-effects model making no allowance for the 
+# correlation structure, and investigate the degree of autocorrelation 
+# that is exhibited by the residuals.
+
+#derp, I'm dumb.
+#model.nocorr <- lme(kwh~sin(2*pi*hour)+cos(2*pi*hour),
+#                    data = readings,
+#                    random = ~ 1 | subject)
