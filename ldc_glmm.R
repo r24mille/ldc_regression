@@ -14,7 +14,7 @@ readings$tou_period <- factor(readings$tou_period,
 
 # Renumbers subjects 1 through n for simplicity.
 meterids <- unique(readings$subject)
-readings$subject_reindexed <- match(readings$subject, meterids)
+readings$subject <- match(readings$subject, meterids)
 
 # Attach to readings data frame to simplify following code.
 attach(readings)
@@ -23,7 +23,7 @@ attach(readings)
 # (pg. 333 of "The R Book"). 1 is the intercept in 
 # regression models, but here it is the overall mean 
 # (ie. grand mean).
-null_model <- lm(kwh ~ 1, readings)
+model.null <- lm(kwh ~ 1, readings)
 
 # Suppose that there are no fixed effects, so that all of the 
 # categorical variables are random effects. Then the fixed 
@@ -44,29 +44,31 @@ null_model <- lm(kwh ~ 1, readings)
 #
 # After the intercept comes the vertical bar | which is read as "given the 
 # following spatial arrangement of the random variables". In this case, there 
-# is ony random effect, subject_reindexed.
-#
-# TODO: random <- ~ 1 | subject_reindexed/daynum/hour
-# TODO: random <- ~ 1 | subject_reindexed/hourindex
-no_fixed_sub_only <- lme(fixed = kwh~1,
-                 random = ~ 1 | subject_reindexed)
-no_fixed_sub_nested_dayhour <- lme(fixed = kwh~1,
-                         random = ~ 1 | subject_reindexed/daynum/hour,
-                         control=lmeControl(opt="optim"))
-no_fixed_sub_hourindex <- lme(fixed = kwh~1,
-                         random = ~ 1 | subject_reindexed/hourindex,
-                         control=lmeControl(opt="optim"))
-no_fixed_sub_daynum <- lme(fixed = kwh~1,
-                               random = ~ 1 | subject_reindexed/daynum,
-                               control=lmeControl(opt="optim"))
-no_fixed_day_nested_sub <- lme(fixed = kwh~1,
-                           random = ~ 1 | daynum/subject_reindexed,
-                           control=lmeControl(opt="optim"))
+# is ony random effect, subject
+model.nofixed.subonly <- lme(fixed = kwh~1, 
+                             random = ~ 1 | subject)
+model.nofixed.sub.nested.daynum <- lme(fixed = kwh~1,
+                                       random = ~ 1 | subject/daynum,
+                                       control=lmeControl(opt="optim"))
+model.nofixed.sub.nested.daynum.hour <- lme(fixed = kwh~1, 
+                                            random = ~ 1 | subject/daynum/hour, 
+                                            control=lmeControl(opt="optim"))
+model.nofixed.sub.nested.hourindex <- lme(fixed = kwh~1, 
+                                          random = ~ 1 | subject/hourindex, 
+                                          control=lmeControl(opt="optim"))
+model.nofixed.daynum.nested.sub <- lme(fixed = kwh~1, 
+                                       random = ~ 1 | daynum/subject, 
+                                       control=lmeControl(opt="optim"))
 
-summary(no_fixed_sub_only)
-summary(no_fixed_sub_nested_dayhour)
-summary(no_fixed_sub_hourindex)
-summary(no_fixed_sub_daynum)
+summary(model.nofixed.subonly)
+summary(model.nofixed.sub.nested.daynum) # Lowest AIC
+summary(model.nofixed.sub.nested.daynum.hour)
+summary(model.nofixed.sub.nested.hourindex) 
+summary(model.nofixed.daynum.nested.sub)
+
+# Attempt to rewrite the successful model from above using lmer
+model.lmer.nofixed.sub.nested.daynum <- lmer(kwh ~ 1 + (1 | subject/daynum))
+summary(model.lmer.nofixed.sub.nested.daynum)
 
 # Linear Mixed-Effects Regression
 # Subject is a random effect because its factor levels have no meaning 
@@ -76,12 +78,12 @@ summary(no_fixed_sub_daynum)
 # mean of the result.
 #
 # Further refinement is made for temporal pseudoreplication as described 
-# on pg. 642 of "The R Book". This considers daynum (a continuous random 
-# effect) as pseudoreplication within each subject.
+# on pg. 965 of "The R Book, 2nd Ed". This considers daynum (a continuous 
+# random effect) as pseudoreplication within each subject.
 #
 # lmeControl added as described in 
 # https://stat.ethz.ch/pipermail/r-help/2008-June/164806.html to work around 
 # an error.
-pseudorep_model <- lme(kwh~temperature*tou_period, 
-                       random=~hourindex|subject_reindexed, 
+pseudorep_model <- lme(kwh~temperature*tou_period*billing_active, 
+                       random=~daynum|subject, 
                        control=lmeControl(opt="optim"))
