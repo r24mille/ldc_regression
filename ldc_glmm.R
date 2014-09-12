@@ -1,6 +1,7 @@
 library(lme4)
 library(nlme) # groupedData
 library(lattice) # plotting
+library(stargazer) # LaTeX tables
 
 # Load SmartMeterReading data from CSV
 home <- setwd(Sys.getenv("HOME"))
@@ -18,11 +19,28 @@ readings$tou_period <- factor(readings$tou_period,
 meterids <- unique(readings$subject)
 readings$subject <- match(readings$subject, meterids)
 
+# To use trellis plotting, begin by turning the readings dataframe into a  
+# groupedData object. Specify the nesting structure of the random effects, and  
+# indicate the fixed effect by defining temperature*tou_period*billing_active 
+# as "outer" to the nesting (ie. a fixed effect):
+#readings <- groupedData(kwh ~ 1 | subject, 
+#                        order.groups = TRUE,
+#                        readings)
+#gsummary(readings)
+#plot(readings)
+
 # Null model is just one parameter, the overall mean 
 # (pg. 333 of "The R Book"). 1 is the intercept in 
 # regression models, but here it is the overall mean 
 # (ie. grand mean).
-model.null <- lm(kwh ~ 1, readings)
+model.null <- lm(kwh ~ 1, 
+                 data = readings)
+summary(model.null)
+
+# Fixed effects only
+model.fixedonly <- lm(kwh ~ temperature*tou_period*billing_active, 
+                      data = readings)
+summary(model.fixedonly)
 
 # Suppose that there are no fixed effects, so that all of the 
 # categorical variables are random effects. Then the fixed 
@@ -92,16 +110,6 @@ summary(model.lmer.fixedinteraction.randomsub)
 # A common cause of temporal pseudoreplication in growth experiments with 
 # fixed effects is when each individual is measured several times as it grows 
 # during the course of an experiment.
-#
-# To use trellis plotting, begin by turning the readings dataframe into a  
-# groupedData object. Specify the nesting structure of the random effects, and  
-# indicate the fixed effect by defining temperature*tou_period*billing_active 
-# as "outer" to the nesting (ie. a fixed effect):
-#readings <- groupedData(kwh ~ 1 | subject,
-#                        outer = ~ billing_active, 
-#                        readings)
-#gsummary(readings)
-#plot(readings, outer=T)
 
 # Further refinement is made for temporal pseudoreplication as described 
 # on pg. 965 of "The R Book, 2nd Ed". This considers daynum (a continuous 
@@ -110,6 +118,13 @@ summary(model.lmer.fixedinteraction.randomsub)
 # lmeControl added as described in 
 # https://stat.ethz.ch/pipermail/r-help/2008-June/164806.html to work around 
 # an error.
+model.lme.threefixed.psuedorep.randsub <- lme(kwh ~ temperature*tou_period*billing_active,
+                     random = ~ 1 | subject,
+                     control = lmeControl(opt="optim"),
+                     data = readings)
+model.lmer.threefixed.psuedorep.randsub <- lmer(kwh ~ temperature*tou_period*billing_active + (1 | subject), 
+                                             data = readings,
+                                             REML=FALSE)
 model.threefixed.psuedorep.hourindex <- lmer(kwh ~ temperature*tou_period*billing_active + (hourindex | subject), 
                                   data = readings,
                                   REML=FALSE)
@@ -122,18 +137,17 @@ model.threefixed.psuedorep.hourindex <- lmer(kwh ~ temperature*tou_period*billin
 summary(model.threefixed.psuedorep.hourindex) # Lower AIC
 #summary(model.threefixed.psuedorep.daynum)
 
-anova(model.lmer.fixedinteraction.randomsub, model.threefixed.psuedorep.hourindex)
-
 # After settling on the pseudoreplication model, check the fit of the model.
 model.ldc.lme <- lme(kwh ~ temperature*tou_period*billing_active,
                      random = ~ hourindex | subject,
                      control = lmeControl(opt="optim"),
                      data = readings)
-model.ldc.lmer <- lmer(kwh ~ temperature*tou_period*billing_active + (hourindex | subject), 
-                       data = readings,
-                       REML=FALSE)
+summary(model.ldc.lme)
 
-qqline(resid(model.ldc.lmer))
+model.ldc.lmer <- lmer(kwh ~ temperature*tou_period*billing_active + (1 + hourindex | subject), 
+                       data = readings,
+                       REML = FALSE)
+summary(model.ldc.lmer)
 
 # Time series analysis in mixed-effects models (pg. 699)
 # It is common to have repeated measures on subjects in observational studies, 
