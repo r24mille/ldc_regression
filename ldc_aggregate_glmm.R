@@ -4,6 +4,9 @@ library(nlme) # groupedData
 library(lattice) # Plotting
 library(stargazer) # LaTeX tables
 
+# Source the function in another file
+source('piecewise_cdh_setpoint.R')
+
 # Load SmartMeterReading data from CSV
 home <- setwd(Sys.getenv("HOME"))
 fpath <- file.path(home, 
@@ -15,6 +18,65 @@ readings.aggregate <- read.csv(fpath)
 readings.aggregate$tou_period <- factor(readings.aggregate$tou_period, 
                               c("off_weekend", "off_morning", "mid_morning", 
                                 "on_peak", "mid_evening", "off_evening"))
+
+## 
+# Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
+# 90th percentile observations for each temperature "bin" similar to the 
+# three-line model.
+
+# Determine kwh quantils for each temperature "bin"
+quants <- ddply(readings.aggregate,
+                   .(temperature), 
+                   function(x) quantile(x$kwh, c(.1, .5, .9))
+)
+# Hacky due to temperatures matching index
+# TODO: Fixe with a proper subset... I'm tired of fighting it for today
+readings.aggregate.tenth <- subset(readings.aggregate, 
+                                   kwh <= quants[temperature, 2])
+readings.aggregate.middle <- subset(readings.aggregate, 
+                                    kwh > quants[temperature, 2] & kwh < quants[temperature, 4])
+readings.aggregate.ninetieth <- subset(readings.aggregate, 
+                                      kwh >= quants[temperature, 4])
+
+# Determine the A/C setpoint threshold
+piecewise.tenth <- findSingleSetpoint(readings.aggregate.tenth$temperature, 
+                                      readings.aggregate.tenth$kwh)
+piecewise.middle <- findSingleSetpoint(readings.aggregate.middle$temperature, 
+                                       readings.aggregate.middle$kwh)
+piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperature, 
+                                          readings.aggregate.ninetieth$kwh)
+plot(readings.aggregate$temperature, 
+     readings.aggregate$kwh,
+     pch = 4, 
+     main = "Cooling Degree Hour Breakpoints", 
+     ylab = "Average Meter Reading (kWh)", 
+     xlab = "Outdoor Temperature (Celsius)", 
+     col = rgb(0.5, 0.5, 0.5, 0.5, maxColorValue=1))
+abline(piecewise.tenth[1] + piecewise.tenth[4] * piecewise.tenth[2], 
+       -piecewise.tenth[2], 
+       lwd = 2, 
+       col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1)) #lhs  
+abline(piecewise.tenth[1] - piecewise.tenth[4] * piecewise.tenth[3], 
+       piecewise.tenth[3], 
+       lwd = 2, 
+       col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1))  #rs
+abline(piecewise.middle[1] + piecewise.middle[4] * piecewise.middle[2], 
+       -piecewise.middle[2], 
+       lwd = 2, 
+       col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1)) #lhs  
+abline(piecewise.middle[1] - piecewise.middle[4] * piecewise.middle[3], 
+       piecewise.middle[3], 
+       lwd = 2, 
+       col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1))  #rs
+abline(piecewise.ninetieth[1] + piecewise.ninetieth[4] * piecewise.ninetieth[2], 
+       -piecewise.ninetieth[2], 
+       lwd = 2, 
+       col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1)) #lhs  
+abline(piecewise.ninetieth[1] - piecewise.ninetieth[4] * piecewise.ninetieth[3], 
+       piecewise.ninetieth[3], 
+       lwd = 2, 
+       col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1))  #rs
+
 
 ##
 # A linear model will be build using lm(...) for each model variant so that 
