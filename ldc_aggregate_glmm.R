@@ -19,6 +19,14 @@ readings.aggregate$tou_period <- factor(readings.aggregate$tou_period,
                               c("off_weekend", "off_morning", "mid_morning", 
                                 "on_peak", "mid_evening", "off_evening"))
 
+# Represent hours as levels rather than integers
+readings.aggregate$hrstr <- paste0("h", readings.aggregate$hour)
+readings.aggregate$hrstr <- factor(readings.aggregate$hrstr, 
+                                   c("h0", "h1", "h2", "h3", "h4", "h5", "h6", 
+                                     "h7", "h8", "h9", "h10", "h11", "h12", 
+                                     "h13", "h14", "h15", "h16", "h17", "h18", 
+                                     "h19", "h20", "h21", "h22", "h23"))
+
 ## 
 # Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
 # 90th percentile observations for each temperature "bin" similar to the 
@@ -123,18 +131,18 @@ summary(model.glm.fe.inter.tmp_prd_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients for main effects only.
-model.lm.fe.main.tmp_hr_bill <- lm(kwh ~ temperature + hour + billing_active, 
+model.lm.fe.main.tmp_hr_bill <- lm(kwh ~ temperature + hrstr + billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.main.tmp_hr_bill <- glm(kwh ~ temperature + hour + billing_active, 
+model.glm.fe.main.tmp_hr_bill <- glm(kwh ~ temperature + hrstr + billing_active, 
                                       data = readings.aggregate)
 summary(model.lm.fe.main.tmp_hr_bill)
 summary(model.glm.fe.main.tmp_hr_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients of main effects and all interactions.
-model.lm.fe.inter.tmp_hr_bill <- lm(kwh ~ temperature * hour * billing_active, 
+model.lm.fe.inter.tmp_hr_bill <- lm(kwh ~ temperature * hrstr * billing_active, 
                                      data = readings.aggregate)
-model.glm.fe.inter.tmp_hr_bill <- glm(kwh ~ temperature * hour * billing_active, 
+model.glm.fe.inter.tmp_hr_bill <- glm(kwh ~ temperature * hrstr * billing_active, 
                                        data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_hr_bill)
 summary(model.glm.fe.inter.tmp_hr_bill)
@@ -159,18 +167,18 @@ summary(model.glm.fe.inter.cdh_prd_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients for main effects only.
-model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hour + billing_active, 
+model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hrstr + billing_active, 
                                    data = readings.aggregate)
-model.glm.fe.main.cdh_hr_bill <- glm(kwh ~ cdh + hour + billing_active, 
+model.glm.fe.main.cdh_hr_bill <- glm(kwh ~ cdh + hrstr + billing_active, 
                                      data = readings.aggregate)
 summary(model.lm.fe.main.cdh_hr_bill)
 summary(model.glm.fe.main.cdh_hr_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients of main effects and all interactions.
-model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hour * billing_active, 
+model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hrstr * billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.inter.cdh_hr_bill <- glm(kwh ~ cdh * hour * billing_active, 
+model.glm.fe.inter.cdh_hr_bill <- glm(kwh ~ cdh * hrstr * billing_active, 
                                       data = readings.aggregate)
 summary(model.lm.fe.inter.cdh_hr_bill)
 summary(model.glm.fe.inter.cdh_hr_bill)
@@ -179,9 +187,9 @@ summary(model.glm.fe.inter.cdh_hr_bill)
 
 
 # Experiment with price as well
-supamodel.lm <- lm(kwh ~ cdh * hour * tou_period * billing_active,
+supamodel.lm <- lm(kwh ~ cdh * hrstr * tou_period * billing_active,
                      data = readings.aggregate)
 summary(supamodel.lm)
-supamodel.glm <- glm(kwh ~ cdh * hour * tou_period * billing_active,
+supamodel.glm <- glm(kwh ~ cdh * hrstr * tou_period * billing_active,
                      data = readings.aggregate)
 summary(supamodel.glm)
