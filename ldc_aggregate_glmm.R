@@ -29,8 +29,8 @@ quants <- ddply(readings.aggregate,
                    .(temperature), 
                    function(x) quantile(x$kwh, c(.1, .5, .9))
 )
-# Hacky due to temperatures matching index
-# TODO: Fixe with a proper subset... I'm tired of fighting it for today
+# Hacky due to temperatures matching quant indeces (by chance).
+# TODO: Fix with a proper subset(...) I'm tired of fighting it for today.
 readings.aggregate.tenth <- subset(readings.aggregate, 
                                    kwh <= quants[temperature, 2])
 readings.aggregate.middle <- subset(readings.aggregate, 
@@ -77,6 +77,23 @@ abline(piecewise.ninetieth[1] - piecewise.ninetieth[4] * piecewise.ninetieth[3],
        lwd = 2, 
        col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1))  #rs
 
+##
+# Prior work determined several Cooling-Degree Hour (CDH) breakpoints for three
+# quantiles. Use the CDH breakpoint from the 90th percentile, meaning that 
+# this is the lowest breakpoint that people may start reacting.
+cdhbreak <- floor(piecewise.middle[4]) # TODO: floor or round?
+readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
+                                  readings.aggregate$temperature - cdhbreak, 
+                                  0)
+
+##
+# Add column which converts TOU Period to its price level
+readings.aggregate$price <- readings.aggregate$tou_period
+readings.aggregate$price <- gsub("off_weekend", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("off_morning", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("off_evening", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
 
 ##
 # A linear model will be build using lm(...) for each model variant so that 
@@ -121,3 +138,50 @@ model.glm.fe.inter.tmp_hr_bill <- glm(kwh ~ temperature * hour * billing_active,
                                        data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_hr_bill)
 summary(model.glm.fe.inter.tmp_hr_bill)
+
+# Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
+# using using coefficients for main effects only.
+model.lm.fe.main.cdh_prd_bill <- lm(kwh ~ cdh + tou_period + billing_active, 
+                                    data = readings.aggregate)
+model.glm.fe.main.cdh_prd_bill <- glm(kwh ~ cdh + tou_period + billing_active, 
+                                      data = readings.aggregate)
+summary(model.lm.fe.main.cdh_prd_bill)
+summary(model.glm.fe.main.cdh_prd_bill)
+
+# Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
+# using using coefficients of main effects and all interactions.
+model.lm.fe.inter.cdh_prd_bill <- lm(kwh ~ cdh * tou_period * billing_active, 
+                                     data = readings.aggregate)
+model.glm.fe.inter.cdh_prd_bill <- glm(kwh ~ cdh * tou_period * billing_active, 
+                                       data = readings.aggregate)
+summary(model.lm.fe.inter.cdh_prd_bill)
+summary(model.glm.fe.inter.cdh_prd_bill)
+
+# Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
+# using using coefficients for main effects only.
+model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hour + billing_active, 
+                                   data = readings.aggregate)
+model.glm.fe.main.cdh_hr_bill <- glm(kwh ~ cdh + hour + billing_active, 
+                                     data = readings.aggregate)
+summary(model.lm.fe.main.cdh_hr_bill)
+summary(model.glm.fe.main.cdh_hr_bill)
+
+# Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
+# using using coefficients of main effects and all interactions.
+model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hour * billing_active, 
+                                    data = readings.aggregate)
+model.glm.fe.inter.cdh_hr_bill <- glm(kwh ~ cdh * hour * billing_active, 
+                                      data = readings.aggregate)
+summary(model.lm.fe.inter.cdh_hr_bill)
+summary(model.glm.fe.inter.cdh_hr_bill)
+
+
+
+
+# Experiment with price as well
+supamodel.lm <- lm(kwh ~ cdh * hour * tou_period * billing_active,
+                     data = readings.aggregate)
+summary(supamodel.lm)
+supamodel.glm <- glm(kwh ~ cdh * hour * tou_period * billing_active,
+                     data = readings.aggregate)
+summary(supamodel.glm)
