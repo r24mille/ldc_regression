@@ -8,7 +8,7 @@ library(stargazer) # LaTeX tables
 source('piecewise_cdh_setpoint.R')
 
 # Load SmartMeterReading data from CSV
-home <- setwd(Sys.getenv("HOME"))
+home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R/", 
                    "full_aggregate_readings.csv")
@@ -53,37 +53,40 @@ piecewise.middle <- findSingleSetpoint(readings.aggregate.middle$temperature,
                                        readings.aggregate.middle$kwh)
 piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperature, 
                                           readings.aggregate.ninetieth$kwh)
-plot(readings.aggregate$temperature, 
-     readings.aggregate$kwh,
-     pch = 4, 
-     main = "Cooling Degree Hour Breakpoints", 
-     ylab = "Average Meter Reading (kWh)", 
-     xlab = "Outdoor Temperature (Celsius)", 
-     col = rgb(0.5, 0.5, 0.5, 0.5, maxColorValue=1))
-abline(piecewise.tenth[1] + piecewise.tenth[4] * piecewise.tenth[2], 
-       -piecewise.tenth[2], 
-       lwd = 2, 
-       col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1)) #lhs  
-abline(piecewise.tenth[1] - piecewise.tenth[4] * piecewise.tenth[3], 
-       piecewise.tenth[3], 
-       lwd = 2, 
-       col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1))  #rs
-abline(piecewise.middle[1] + piecewise.middle[4] * piecewise.middle[2], 
-       -piecewise.middle[2], 
-       lwd = 2, 
-       col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1)) #lhs  
-abline(piecewise.middle[1] - piecewise.middle[4] * piecewise.middle[3], 
-       piecewise.middle[3], 
-       lwd = 2, 
-       col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1))  #rs
-abline(piecewise.ninetieth[1] + piecewise.ninetieth[4] * piecewise.ninetieth[2], 
-       -piecewise.ninetieth[2], 
-       lwd = 2, 
-       col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1)) #lhs  
-abline(piecewise.ninetieth[1] - piecewise.ninetieth[4] * piecewise.ninetieth[3], 
-       piecewise.ninetieth[3], 
-       lwd = 2, 
-       col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1))  #rs
+##
+# Plot the temperature breakpoint data.
+
+# plot(readings.aggregate$temperature, 
+#      readings.aggregate$kwh,
+#      pch = 4, 
+#      main = "Cooling Degree Hour Breakpoints", 
+#      ylab = "Average Meter Reading (kWh)", 
+#      xlab = "Outdoor Temperature (Celsius)", 
+#      col = rgb(0.5, 0.5, 0.5, 0.5, maxColorValue=1))
+# abline(piecewise.tenth[1] + piecewise.tenth[4] * piecewise.tenth[2], 
+#        -piecewise.tenth[2], 
+#        lwd = 2, 
+#        col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1)) #lhs  
+# abline(piecewise.tenth[1] - piecewise.tenth[4] * piecewise.tenth[3], 
+#        piecewise.tenth[3], 
+#        lwd = 2, 
+#        col = rgb(0.17, 0.61, 0.22, 1, maxColorValue=1))  #rs
+# abline(piecewise.middle[1] + piecewise.middle[4] * piecewise.middle[2], 
+#        -piecewise.middle[2], 
+#        lwd = 2, 
+#        col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1)) #lhs  
+# abline(piecewise.middle[1] - piecewise.middle[4] * piecewise.middle[3], 
+#        piecewise.middle[3], 
+#        lwd = 2, 
+#        col = rgb(0.59, 0.24, 0.17, 1, maxColorValue=1))  #rs
+# abline(piecewise.ninetieth[1] + piecewise.ninetieth[4] * piecewise.ninetieth[2], 
+#        -piecewise.ninetieth[2], 
+#        lwd = 2, 
+#        col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1)) #lhs  
+# abline(piecewise.ninetieth[1] - piecewise.ninetieth[4] * piecewise.ninetieth[3], 
+#        piecewise.ninetieth[3], 
+#        lwd = 2, 
+#        col = rgb(0.19, 0.22, 0.60, 1, maxColorValue=1))  #rs
 
 ##
 # Prior work determined several Cooling-Degree Hour (CDH) breakpoints for three
@@ -187,9 +190,9 @@ summary(model.glm.fe.inter.cdh_hr_bill)
 
 
 # Experiment with price as well
-supamodel.lm <- lm(kwh ~ cdh * hrstr * tou_period * billing_active,
+supamodel.lm <- lm(kwh ~ cdh + hrstr + cdh:hrstr + price*billing_active + billing_active,
                      data = readings.aggregate)
 summary(supamodel.lm)
-supamodel.glm <- glm(kwh ~ cdh * hrstr * tou_period * billing_active,
+supamodel.glm <- glm(kwh ~ cdh + hrstr + cdh:hrstr + hrstr:price + billing_active,
                      data = readings.aggregate)
 summary(supamodel.glm)
