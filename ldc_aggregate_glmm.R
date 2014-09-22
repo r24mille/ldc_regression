@@ -210,3 +210,19 @@ supamodel.lm <- lm(kwh ~ cdh + hrstr + weekend + tou_period + billing_active + c
 summary(supamodel.lm)
 AIC(supamodel.lm)
 anova(supamodel.lm)
+
+# Experimentation area to try and fit as many fixed effects as possible for the
+# highest descriptive power (regardless of AIC or meaning)
+supamodel.lm.1lag <- lm(kwh ~ cdh_1lag + hrstr + weekend + tou_period + billing_active + cdh_1lag:hrstr + hrstr:weekend + cdh_1lag:billing_active + weekend:billing_active + tou_period:billing_active + cdh_1lag:weekend:billing_active,
+                   data = readings.aggregate)
+summary(supamodel.lm.1lag)
+AIC(supamodel.lm.1lag)
+anova(supamodel.lm.1lag)
+
+# Experimentation area to try and fit as many fixed effects as possible for the
+# highest descriptive power (regardless of AIC or meaning)
+supamodel.lm.2lag <- lm(kwh ~ cdh_2lag + hrstr + weekend + tou_period + billing_active + cdh_2lag:hrstr + hrstr:weekend + cdh_2lag:billing_active + weekend:billing_active + tou_period:billing_active + cdh_2lag:weekend:billing_active,
+                   data = readings.aggregate)
+summary(supamodel.lm.2lag)
+AIC(supamodel.lm.2lag)
+anova(supamodel.lm.2lag)
