@@ -123,7 +123,7 @@ readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$p
 
 # Temperature, TOU Period, and billing method modeled as fixed effects using 
 # using coefficients for main effects only.
-model.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_active, 
+model.lm.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_active, 
                                     data = readings.aggregate)
 summary(model.lm.fe.main.tmp_prd_bill)
 AIC(model.lm.fe.main.tmp_prd_bill)
