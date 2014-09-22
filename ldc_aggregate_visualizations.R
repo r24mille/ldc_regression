@@ -1,4 +1,4 @@
-home <- setwd(Sys.getenv("HOME"))
+home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R/", 
                    "full_aggregate_readings.csv")
@@ -13,7 +13,7 @@ plot(readings.aggregate$timestamp_dst,
      readings.aggregate$agg_count,
      main = "Count of Observations Each Hour", 
      ylab = paste("Number of Households with a Reading (max=", 
-                  max(readings.counts$number_observations), 
+                  max(readings.aggregate$agg_count), 
                   ")"),
      xlab = "Date (hourly)", 
      type = "p", # Points
@@ -21,7 +21,7 @@ plot(readings.aggregate$timestamp_dst,
      col = rgb(0, 0, 0, 50, maxColorValue=255), 
      xaxt = "n" # x-axis type "n" turns of ticks
      )
-tsrange <- as.POSIXct(round(range(readings.counts$observation_timestamp), 
+tsrange <- as.POSIXct(round(range(readings.aggregate$timestamp_dst), 
                       "days"))
 axis.POSIXct(1, 
              at = seq(tsrange[1], tsrange[2], by="month"), 
@@ -38,7 +38,7 @@ plot(readings.aggregate$timestamp_dst,
      col = rgb(0, 0, 0, 1, maxColorValue=1), 
      xaxt = "n" # x-axis type "n" turns of ticks
 )
-tsrange <- as.POSIXct(round(range(readings.counts$observation_timestamp), 
+tsrange <- as.POSIXct(round(range(readings.aggregate$timestamp_dst), 
                             "days"))
 axis.POSIXct(1, 
              at = seq(tsrange[1], tsrange[2], by="month"), 
