@@ -127,6 +127,7 @@ model.lm.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_act
                                     data = readings.aggregate)
 summary(model.lm.fe.main.tmp_prd_bill)
 AIC(model.lm.fe.main.tmp_prd_bill)
+anova(model.lm.fe.main.tmp_prd_bill)
 
 # Temperature, TOU Period, and billing method modeled as fixed effects using 
 # using coefficients of main effects and all interactions.
@@ -134,6 +135,7 @@ model.lm.fe.inter.tmp_prd_bill <- lm(kwh ~ temperature * tou_period * billing_ac
                                          data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_prd_bill)
 AIC(model.lm.fe.inter.tmp_prd_bill)
+anova(model.lm.fe.inter.tmp_prd_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients for main effects only.
@@ -141,6 +143,7 @@ model.lm.fe.main.tmp_hr_bill <- lm(kwh ~ temperature + hrstr + billing_active,
                                     data = readings.aggregate)
 summary(model.lm.fe.main.tmp_hr_bill)
 AIC(model.lm.fe.main.tmp_hr_bill)
+anova(model.lm.fe.main.tmp_hr_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients of main effects and all interactions.
@@ -148,6 +151,7 @@ model.lm.fe.inter.tmp_hr_bill <- lm(kwh ~ temperature * hrstr * billing_active,
                                      data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_hr_bill)
 AIC(model.lm.fe.inter.tmp_hr_bill)
+anova(model.lm.fe.inter.tmp_hr_bill)
 
 # Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
 # using using coefficients for main effects only.
@@ -155,6 +159,7 @@ model.lm.fe.main.cdh_prd_bill <- lm(kwh ~ cdh + tou_period + billing_active,
                                     data = readings.aggregate)
 summary(model.lm.fe.main.cdh_prd_bill)
 AIC(model.lm.fe.main.cdh_prd_bill)
+anova(model.lm.fe.main.cdh_prd_bill)
 
 # Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
 # using using coefficients of main effects and all interactions.
@@ -162,13 +167,15 @@ model.lm.fe.inter.cdh_prd_bill <- lm(kwh ~ cdh * tou_period * billing_active,
                                      data = readings.aggregate)
 summary(model.lm.fe.inter.cdh_prd_bill)
 AIC(model.lm.fe.inter.cdh_prd_bill)
+anova(model.lm.fe.inter.cdh_prd_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients for main effects only.
 model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hrstr + billing_active, 
                                    data = readings.aggregate)
 summary(model.lm.fe.main.cdh_hr_bill)
-summary(model.lm.fe.main.cdh_hr_bill)
+AIC(model.lm.fe.main.cdh_hr_bill)
+anova(model.lm.fe.main.cdh_hr_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients of main effects and all interactions.
@@ -176,13 +183,15 @@ model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hrstr * billing_active,
                                     data = readings.aggregate)
 summary(model.lm.fe.inter.cdh_hr_bill)
 AIC(model.lm.fe.inter.cdh_hr_bill)
+anova(model.lm.fe.inter.cdh_hr_bill)
 
 
 
 
 # Experimentation area to try and fit as many fixed effects as possible for the
 # highest descriptive power (regardless of AIC or meaning)
-supamodel.lm <- lm(kwh ~ cdh + hrstr + hrstr:cdh + hrstr:weekend + tou_period + tou_period:cdh + tou_period:billing_active,
-                     data = readings.aggregate)
+supamodel.lm <- lm(kwh ~ cdh + hrstr + weekend + tou_period + billing_active + cdh:hrstr + hrstr:weekend + cdh:billing_active + weekend:billing_active + tou_period:billing_active + cdh:weekend:billing_active,
+                   data = readings.aggregate)
 summary(supamodel.lm)
 AIC(supamodel.lm)
+anova(supamodel.lm)
