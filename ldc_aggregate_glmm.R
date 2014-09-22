@@ -92,10 +92,15 @@ piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperatu
 # Prior work determined several Cooling-Degree Hour (CDH) breakpoints for three
 # quantiles. Use the CDH breakpoint from the 90th percentile, meaning that 
 # this is the lowest breakpoint that people may start reacting.
-cdhbreak <- floor(piecewise.middle[4]) # TODO: floor or round?
+# cdhbreak <- floor(piecewise.middle[4]) # TODO: floor or round?
+cdhbreak <- 18 # Fixing CDH breakpoint at 18C since it gave better results
 readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
                                   readings.aggregate$temperature - cdhbreak, 
                                   0)
+
+##
+# CDH with 1 or 2 hour lags.
+
 
 ##
 # Add yes/no weekend flag
@@ -113,92 +118,71 @@ readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$p
 readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
 
 ##
-# A linear model will be build using lm(...) for each model variant so that 
-# we can find an R-squared value. Also, a general linear model 
-# will be fit through maximum likelihood estimation using glm(...). This 
-# provides additional metrics such as Akaike Information Criterion (AIC) to 
-# measure model quality.
+# A linear model will be build using lm(...) for each model variant.
 ##
 
 # Temperature, TOU Period, and billing method modeled as fixed effects using 
 # using coefficients for main effects only.
-model.lm.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_active, 
+model.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.main.tmp_prd_bill <- glm(kwh ~ temperature + tou_period + billing_active, 
-                                      data = readings.aggregate)
 summary(model.lm.fe.main.tmp_prd_bill)
-summary(model.glm.fe.main.tmp_prd_bill)
+AIC(model.lm.fe.main.tmp_prd_bill)
 
 # Temperature, TOU Period, and billing method modeled as fixed effects using 
 # using coefficients of main effects and all interactions.
 model.lm.fe.inter.tmp_prd_bill <- lm(kwh ~ temperature * tou_period * billing_active, 
                                          data = readings.aggregate)
-model.glm.fe.inter.tmp_prd_bill <- glm(kwh ~ temperature * tou_period * billing_active, 
-                                           data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_prd_bill)
-summary(model.glm.fe.inter.tmp_prd_bill)
+AIC(model.lm.fe.inter.tmp_prd_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients for main effects only.
 model.lm.fe.main.tmp_hr_bill <- lm(kwh ~ temperature + hrstr + billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.main.tmp_hr_bill <- glm(kwh ~ temperature + hrstr + billing_active, 
-                                      data = readings.aggregate)
 summary(model.lm.fe.main.tmp_hr_bill)
-summary(model.glm.fe.main.tmp_hr_bill)
+AIC(model.lm.fe.main.tmp_hr_bill)
 
 # Temperature, hour of day, and billing method modeled as fixed effects using 
 # using coefficients of main effects and all interactions.
 model.lm.fe.inter.tmp_hr_bill <- lm(kwh ~ temperature * hrstr * billing_active, 
                                      data = readings.aggregate)
-model.glm.fe.inter.tmp_hr_bill <- glm(kwh ~ temperature * hrstr * billing_active, 
-                                       data = readings.aggregate)
 summary(model.lm.fe.inter.tmp_hr_bill)
-summary(model.glm.fe.inter.tmp_hr_bill)
+AIC(model.lm.fe.inter.tmp_hr_bill)
 
 # Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
 # using using coefficients for main effects only.
 model.lm.fe.main.cdh_prd_bill <- lm(kwh ~ cdh + tou_period + billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.main.cdh_prd_bill <- glm(kwh ~ cdh + tou_period + billing_active, 
-                                      data = readings.aggregate)
 summary(model.lm.fe.main.cdh_prd_bill)
-summary(model.glm.fe.main.cdh_prd_bill)
+AIC(model.lm.fe.main.cdh_prd_bill)
 
 # Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
 # using using coefficients of main effects and all interactions.
 model.lm.fe.inter.cdh_prd_bill <- lm(kwh ~ cdh * tou_period * billing_active, 
                                      data = readings.aggregate)
-model.glm.fe.inter.cdh_prd_bill <- glm(kwh ~ cdh * tou_period * billing_active, 
-                                       data = readings.aggregate)
 summary(model.lm.fe.inter.cdh_prd_bill)
-summary(model.glm.fe.inter.cdh_prd_bill)
+AIC(model.lm.fe.inter.cdh_prd_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients for main effects only.
 model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hrstr + billing_active, 
                                    data = readings.aggregate)
-model.glm.fe.main.cdh_hr_bill <- glm(kwh ~ cdh + hrstr + billing_active, 
-                                     data = readings.aggregate)
 summary(model.lm.fe.main.cdh_hr_bill)
-summary(model.glm.fe.main.cdh_hr_bill)
+summary(model.lm.fe.main.cdh_hr_bill)
 
 # Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
 # using using coefficients of main effects and all interactions.
 model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hrstr * billing_active, 
                                     data = readings.aggregate)
-model.glm.fe.inter.cdh_hr_bill <- glm(kwh ~ cdh * hrstr * billing_active, 
-                                      data = readings.aggregate)
 summary(model.lm.fe.inter.cdh_hr_bill)
-summary(model.glm.fe.inter.cdh_hr_bill)
+AIC(model.lm.fe.inter.cdh_hr_bill)
 
 
 
 
-# Experiment with price as well
-supamodel.lm <- lm(kwh ~ cdh + hrstr + cdh:hrstr + price*billing_active + billing_active,
+# Experimentation area to try and fit as many fixed effects as possible for the
+# highest descriptive power (regardless of AIC or meaning)
+supamodel.lm <- lm(kwh ~ cdh + hrstr + hrstr:cdh + hrstr:weekend + tou_period + tou_period:cdh + tou_period:billing_active,
                      data = readings.aggregate)
 summary(supamodel.lm)
-supamodel.glm <- glm(kwh ~ cdh + hrstr + cdh:hrstr + hrstr:price + billing_active,
-                     data = readings.aggregate)
-summary(supamodel.glm)
+AIC(supamodel.lm)
