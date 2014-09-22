@@ -31,6 +31,7 @@ readings.aggregate$hrstr <- factor(readings.aggregate$hrstr,
 # Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
 # 90th percentile observations for each temperature "bin" similar to the 
 # three-line model.
+##
 
 # Determine kwh quantils for each temperature "bin"
 quants <- ddply(readings.aggregate,
@@ -55,6 +56,7 @@ piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperatu
                                           readings.aggregate.ninetieth$kwh)
 ##
 # Plot the temperature breakpoint data.
+##
 
 # plot(readings.aggregate$temperature, 
 #      readings.aggregate$kwh,
@@ -92,6 +94,7 @@ piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperatu
 # Prior work determined several Cooling-Degree Hour (CDH) breakpoints for three
 # quantiles. Use the CDH breakpoint from the 90th percentile, meaning that 
 # this is the lowest breakpoint that people may start reacting.
+##
 # cdhbreak <- floor(piecewise.middle[4]) # TODO: floor or round?
 cdhbreak <- 18 # Fixing CDH breakpoint at 18C since it gave better results
 readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
@@ -100,7 +103,19 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 ##
 # CDH with 1 or 2 hour lags.
-
+##
+for(i in 1:nrow(readings.aggregate)) {
+  if (i == 1) {
+    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"]
+    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"]
+  } else if (i == 2) {
+    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
+    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
+  } else {
+    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
+    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
+  }
+}
 
 ##
 # Add yes/no weekend flag
