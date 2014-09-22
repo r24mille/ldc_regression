@@ -98,6 +98,12 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
                                   0)
 
 ##
+# Add yes/no weekend flag
+readings.aggregate$weekend <- ifelse(readings.aggregate$tou_period %in% c("off_weekend"),
+                                      "Yes",
+                                      "No")
+
+##
 # Add column which converts TOU Period to its price level
 readings.aggregate$price <- readings.aggregate$tou_period
 readings.aggregate$price <- gsub("off_weekend", "off_peak", readings.aggregate$price)
