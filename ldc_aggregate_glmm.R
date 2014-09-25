@@ -102,18 +102,25 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
                                   0)
 
 ##
-# CDH with 1 or 2 hour lags.
+# CDH with 1-3 hour lags.
 ##
 for(i in 1:nrow(readings.aggregate)) {
   if (i == 1) {
     readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"]
     readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"]
+    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"]
   } else if (i == 2) {
     readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
     readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-  } else {
+    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
+  } else if (i == 3) {
     readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
     readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
+    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
+  }else {
+    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
+    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
+    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"] + readings.aggregate[i-3, "cdh"]
   }
 }
 
@@ -131,6 +138,11 @@ readings.aggregate$price <- gsub("off_morning", "off_peak", readings.aggregate$p
 readings.aggregate$price <- gsub("off_evening", "off_peak", readings.aggregate$price)
 readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$price)
 readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
+
+##
+# Add column which represents "month" as a categorical factor
+readings.aggregate$timestamp_dst <- as.POSIXlt(readings.aggregate$timestamp_dst)
+readings.aggregate$month <- paste0("m", (readings.aggregate$timestamp_dst$mon + 1))
 
 ##
 # A linear model will be build using lm(...) for each model variant.
@@ -226,3 +238,18 @@ supamodel.lm.2lag <- lm(kwh ~ cdh_2lag + hrstr + weekend + tou_period + billing_
 summary(supamodel.lm.2lag)
 AIC(supamodel.lm.2lag)
 anova(supamodel.lm.2lag)
+
+# Experimentation area to try and fit as many fixed effects as possible for the
+# highest descriptive power (regardless of AIC or meaning)
+supamodel.lm.3lag <- lm(kwh ~ cdh_3lag*hrstr*weekend*tou_period*billing_active*price,
+                        data = readings.aggregate)
+summary(supamodel.lm.3lag)
+AIC(supamodel.lm.3lag)
+anova(supamodel.lm.3lag)
+
+supamodel.lm.3lag.slim <- lm(kwh ~ cdh_3lag + hrstr + weekend + tou_period + billing_active + cdh_3lag:hrstr + hrstr:weekend + cdh_3lag:tou_period + cdh_3lag:billing_active + weekend:billing_active + tou_period:billing_active,
+                             data = readings.aggregate)
+summary(supamodel.lm.3lag.slim)
+AIC(supamodel.lm.3lag.slim)
+anova(supamodel.lm.3lag.slim)
+anova(supamodel.lm.3lag, supamodel.lm.3lag.slim)
