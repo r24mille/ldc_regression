@@ -4,10 +4,12 @@ library(nlme) # groupedData
 library(lattice) # Plotting
 library(stargazer) # LaTeX tables
 library(bestglm) # Compare models using leaps
+library(glmulti)
 
 
 # Source the function in another file
 source('piecewise_cdh_setpoint.R')
+source('reg_subset_visualization.R')
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -277,26 +279,23 @@ readings.aggregate.timecomponents <- subset(readings.aggregate,
                                                        price, 
                                                        billing_active, 
                                                        kwh))
-model.fe.timetou <- bestglm(readings.aggregate.timetou, 
-                            IC = "AIC",
-                            )
+regss.fe.timetou <- regsubsets(kwh ~ cdh_1lag*month*tou_period*billing_active, 
+                            data = readings.aggregate.timetou,
+                            method = "backward", 
+                            nvmax = 1000)
 
-#Example 1.
-#White noise test.
-set.seed(123321123)
-p<-25 #number of inputs
-n<-100 #number of observations
-X<-matrix(rnorm(n*p), ncol=p)
-y<-rnorm(n)
-Xy<-as.data.frame(cbind(X,y))
-names(Xy)<-c(paste("X",1:p,sep=""),"y")
-bestAIC <- bestglm(Xy, IC="AIC")
-NAIC <- length(coef(bestAIC$BestModel))-1
-#The optimal range for q
-bestAIC$Bestq
-#The possible models that can be chosen
-bestAIC$qTable
-#The best models for each subset size
-bestAIC$Subsets
-#The overall best models
-bestAIC$BestModels
+regss.fe.timetoue.summary <- summary(regss.fe.timetou)
+regss.fe.timetoue.summary$bic
+regss.fe.timetoue.summary$adjr2
+plotRegSubSets(regss.fe.timetoue.summary$bic, 
+               regss.fe.timetoue.summary$adjr2, 
+               "Automated 'TOU Period' Model Identification")
+
+regss.fe.timecomponents <- regsubsets(kwh ~ cdh_1lag*month*hrstr*weekend*price*billing_active, 
+                               data = readings.aggregate.timecomponents,
+                               method = "backward", 
+                               nvmax = 1000)
+regss.fe.timecomponents.summary <- summary(regss.fe.timecomponents)
+plotRegSubSets(regss.fe.timecomponents.summary$bic, 
+               regss.fe.timecomponents.summary$adjr2, 
+               "Automated 'TOU/Time Components' Model Identification")
