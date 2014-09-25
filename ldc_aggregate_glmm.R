@@ -5,6 +5,7 @@ library(lattice) # Plotting
 library(stargazer) # LaTeX tables
 library(bestglm) # Compare models using leaps
 library(glmulti)
+library(segmented)
 
 
 # Source the function in another file
@@ -58,33 +59,47 @@ readings.aggregate$month <- paste0("m", (readings.aggregate$timestamp_dst$mon + 
 readings.aggregate$month <- factor(readings.aggregate$month, 
                                    c("m5", "m6", "m7", "m8", "m9", "m10"))
 
-## 
-# Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
-# 90th percentile observations for each temperature "bin" similar to the 
-# three-line model.
 ##
+# Use 'segmented' package rather than the Stack Overflow post to determine 
+# the optimal cooling degree hour breakpoint (though they give the same 
+# result).
+model.readings.lm.presegment <- lm(kwh ~ temperature*tou_period*billing_active,
+                                   data = readings.aggregate)
+seg <- segmented(obj = model.readings.lm.presegment, 
+                 seg.Z = ~temperature,
+                 psi = list(temperature = c(15)))
+cdhbreak <- floor(seg$psi[1,2]) # TODO floor vs. round?
+readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
+                                 readings.aggregate$temperature - cdhbreak, 
+                                 0)
 
-# Determine kwh quantils for each temperature "bin"
-quants <- ddply(readings.aggregate,
-                   .(temperature), 
-                   function(x) quantile(x$kwh, c(.1, .5, .9))
-)
-# Hacky due to temperatures matching quant indeces (by chance).
-# TODO: Fix with a proper subset(...) I'm tired of fighting it for today.
-readings.aggregate.tenth <- subset(readings.aggregate, 
-                                   kwh <= quants[temperature, 2])
-readings.aggregate.middle <- subset(readings.aggregate, 
-                                    kwh > quants[temperature, 2] & kwh < quants[temperature, 4])
-readings.aggregate.ninetieth <- subset(readings.aggregate, 
-                                      kwh >= quants[temperature, 4])
-
-# Determine the A/C setpoint threshold
-piecewise.tenth <- findSingleSetpoint(readings.aggregate.tenth$temperature, 
-                                      readings.aggregate.tenth$kwh)
-piecewise.middle <- findSingleSetpoint(readings.aggregate.middle$temperature, 
-                                       readings.aggregate.middle$kwh)
-piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperature, 
-                                          readings.aggregate.ninetieth$kwh)
+# ## 
+# # Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
+# # 90th percentile observations for each temperature "bin" similar to the 
+# # three-line model.
+# ##
+# 
+# # Determine kwh quantils for each temperature "bin"
+# quants <- ddply(readings.aggregate,
+#                    .(temperature), 
+#                    function(x) quantile(x$kwh, c(.1, .5, .9))
+# )
+# # Hacky due to temperatures matching quant indeces (by chance).
+# # TODO: Fix with a proper subset(...) I'm tired of fighting it for today.
+# readings.aggregate.tenth <- subset(readings.aggregate, 
+#                                    kwh <= quants[temperature, 2])
+# readings.aggregate.middle <- subset(readings.aggregate, 
+#                                     kwh > quants[temperature, 2] & kwh < quants[temperature, 4])
+# readings.aggregate.ninetieth <- subset(readings.aggregate, 
+#                                       kwh >= quants[temperature, 4])
+# 
+# # Determine the A/C setpoint threshold
+# piecewise.tenth <- findSingleSetpoint(readings.aggregate.tenth$temperature, 
+#                                       readings.aggregate.tenth$kwh)
+# piecewise.middle <- findSingleSetpoint(readings.aggregate.middle$temperature, 
+#                                        readings.aggregate.middle$kwh)
+# piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperature, 
+#                                           readings.aggregate.ninetieth$kwh)
 ##
 # Plot the temperature breakpoint data.
 ##
@@ -127,33 +142,36 @@ piecewise.ninetieth <- findSingleSetpoint(readings.aggregate.ninetieth$temperatu
 # this is the lowest breakpoint that people may start reacting.
 ##
 # cdhbreak <- floor(piecewise.middle[4]) # TODO: floor or round?
-cdhbreak <- 18 # Fixing CDH breakpoint at 18C since it gave better results
-readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
-                                  readings.aggregate$temperature - cdhbreak, 
-                                  0)
+# cdhbreak <- 18 # Fixing CDH breakpoint at 18C since it gave better results
+# readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
+#                                   readings.aggregate$temperature - cdhbreak, 
+#                                   0)
 
 ##
 # CDH with 1-3 hour lags.
 ##
-for(i in 1:nrow(readings.aggregate)) {
-  if (i == 1) {
-    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"]
-    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"]
-    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"]
-  } else if (i == 2) {
-    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-  } else if (i == 3) {
-    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
-    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
-  }else {
-    readings.aggregate[i, "cdh_1lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"]
-    readings.aggregate[i, "cdh_2lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"]
-    readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"] + readings.aggregate[i-3, "cdh"]
+createCdhLag <- function(nlags, readingsdf) {
+  cdhlag <- rep(0, nrow(readingsdf)) # Prealloate cdhlag vector
+  
+  # Unfortunately iterating over the dataframe seems to be the best method
+  for(i in 1:nrow(readingsdf)) {
+    cdhlag[i] <- readingsdf[i, "cdh"]
+    tmplg <- 1
+    
+    # Sum what we can or all the values up to nlags
+    while (i-tmplg > 0 & tmplg <= nlags) {
+      cdhlag[i] <- cdhlag[i] + readingsdf[i-tmplg, "cdh"]
+      tmplg <- tmplg + 1
+    }
   }
+  
+  return(cdhlag)
 }
+nlags = 1
+cdhlag <- createCdhLag(nlags,
+                       readings.aggregate)
+readings.aggregate$cdhlag <- cdhlag
+
 
 ##
 # A linear model will be build using lm(...) for each model variant.
@@ -282,14 +300,25 @@ readings.aggregate.timecomponents <- subset(readings.aggregate,
 regss.fe.timetou <- regsubsets(kwh ~ cdh_1lag*month*tou_period*billing_active, 
                             data = readings.aggregate.timetou,
                             method = "backward", 
-                            nvmax = 1000)
+                            nvmax = 500)
 
-regss.fe.timetoue.summary <- summary(regss.fe.timetou)
-regss.fe.timetoue.summary$bic
-regss.fe.timetoue.summary$adjr2
-plotRegSubSets(regss.fe.timetoue.summary$bic, 
-               regss.fe.timetoue.summary$adjr2, 
+regss.fe.timetou.summary <- summary(regss.fe.timetou)
+regss.fe.timetou.summary$which[60,]
+plotRegSubSets(regss.fe.timetou.summary$bic, 
+               regss.fe.timetou.summary$adjr2, 
                "Automated 'TOU Period' Model Identification")
+
+# Use the TRUE/FALSE summary from .which to get the optimal factor values as 
+# a model string.
+regss.fe.timetou.optstr <- apply(regss.fe.timetou.summary$which[60,], 
+                                 1, 
+                                 function(u) paste( names(which(u)), 
+                                                    collapse = "+" ) 
+)
+model.fe.timetou.optimal <- lm(paste("kwh ~", ),
+                               data = readings.aggregate)
+
+
 
 regss.fe.timecomponents <- regsubsets(kwh ~ cdh_1lag*month*hrstr*weekend*price*billing_active, 
                                data = readings.aggregate.timecomponents,
