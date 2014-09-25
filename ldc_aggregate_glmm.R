@@ -3,6 +3,8 @@ library(plyr) # Summarize dataframe
 library(nlme) # groupedData
 library(lattice) # Plotting
 library(stargazer) # LaTeX tables
+library(bestglm) # Compare models using leaps
+
 
 # Source the function in another file
 source('piecewise_cdh_setpoint.R')
@@ -26,6 +28,33 @@ readings.aggregate$hrstr <- factor(readings.aggregate$hrstr,
                                      "h7", "h8", "h9", "h10", "h11", "h12", 
                                      "h13", "h14", "h15", "h16", "h17", "h18", 
                                      "h19", "h20", "h21", "h22", "h23"))
+
+##
+# Add yes/no weekend flag
+readings.aggregate$weekend <- ifelse(readings.aggregate$tou_period %in% c("off_weekend"),
+                                     "Yes",
+                                     "No")
+
+readings.aggregate$weekend <- factor(readings.aggregate$weekend, 
+                                     unique(readings.aggregate$weekend))
+
+##
+# Add column which converts TOU Period to its price level
+readings.aggregate$price <- readings.aggregate$tou_period
+readings.aggregate$price <- gsub("off_weekend", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("off_morning", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("off_evening", "off_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$price)
+readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
+readings.aggregate$price <- factor(readings.aggregate$price, 
+                                   c("off_peak", "mid_peak", "on_peak"))
+
+##
+# Add column which represents "month" as a categorical factor
+readings.aggregate$timestamp_dst <- as.POSIXlt(readings.aggregate$timestamp_dst)
+readings.aggregate$month <- paste0("m", (readings.aggregate$timestamp_dst$mon + 1))
+readings.aggregate$month <- factor(readings.aggregate$month, 
+                                   c("m5", "m6", "m7", "m8", "m9", "m10"))
 
 ## 
 # Section finds the Cooling-Degree Hour (CDH) baseline for 10th, middle, and 
@@ -123,26 +152,6 @@ for(i in 1:nrow(readings.aggregate)) {
     readings.aggregate[i, "cdh_3lag"] <- readings.aggregate[i, "cdh"] + readings.aggregate[i-1, "cdh"] + readings.aggregate[i-2, "cdh"] + readings.aggregate[i-3, "cdh"]
   }
 }
-
-##
-# Add yes/no weekend flag
-readings.aggregate$weekend <- ifelse(readings.aggregate$tou_period %in% c("off_weekend"),
-                                      "Yes",
-                                      "No")
-
-##
-# Add column which converts TOU Period to its price level
-readings.aggregate$price <- readings.aggregate$tou_period
-readings.aggregate$price <- gsub("off_weekend", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("off_morning", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("off_evening", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
-
-##
-# Add column which represents "month" as a categorical factor
-readings.aggregate$timestamp_dst <- as.POSIXlt(readings.aggregate$timestamp_dst)
-readings.aggregate$month <- paste0("m", (readings.aggregate$timestamp_dst$mon + 1))
 
 ##
 # A linear model will be build using lm(...) for each model variant.
@@ -247,9 +256,47 @@ summary(supamodel.lm.3lag)
 AIC(supamodel.lm.3lag)
 anova(supamodel.lm.3lag)
 
-supamodel.lm.3lag.slim <- lm(kwh ~ cdh_3lag + hrstr + weekend + tou_period + billing_active + cdh_3lag:hrstr + hrstr:weekend + cdh_3lag:tou_period + cdh_3lag:billing_active + weekend:billing_active + tou_period:billing_active,
-                             data = readings.aggregate)
-summary(supamodel.lm.3lag.slim)
-AIC(supamodel.lm.3lag.slim)
-anova(supamodel.lm.3lag.slim)
-anova(supamodel.lm.3lag, supamodel.lm.3lag.slim)
+
+
+##
+# Strip two data frames down to TOU Period (+others) and 
+# "time components" (+others). Then use bestglm to determine the best 
+# combination of fixed effects for each class of model.
+readings.aggregate.timetou <- subset(readings.aggregate, 
+                                    select = c(cdh_1lag, 
+                                               month, 
+                                               tou_period, 
+                                               billing_active,
+                                               kwh))
+
+readings.aggregate.timecomponents <- subset(readings.aggregate, 
+                                            select = c(cdh_1lag, 
+                                                       month, 
+                                                       hrstr, 
+                                                       weekend, 
+                                                       price, 
+                                                       billing_active, 
+                                                       kwh))
+model.fe.timetou <- bestglm(readings.aggregate.timetou, 
+                            IC = "AIC",
+                            )
+
+#Example 1.
+#White noise test.
+set.seed(123321123)
+p<-25 #number of inputs
+n<-100 #number of observations
+X<-matrix(rnorm(n*p), ncol=p)
+y<-rnorm(n)
+Xy<-as.data.frame(cbind(X,y))
+names(Xy)<-c(paste("X",1:p,sep=""),"y")
+bestAIC <- bestglm(Xy, IC="AIC")
+NAIC <- length(coef(bestAIC$BestModel))-1
+#The optimal range for q
+bestAIC$Bestq
+#The possible models that can be chosen
+bestAIC$qTable
+#The best models for each subset size
+bestAIC$Subsets
+#The overall best models
+bestAIC$BestModels
