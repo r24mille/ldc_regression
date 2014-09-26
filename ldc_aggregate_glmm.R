@@ -152,10 +152,28 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 ##
 # CDH with 1-3 hour lags.
 ##
-nlags = 1
-cdhlag <- createCdhLag(nlags,
-                       readings.aggregate)
-readings.aggregate$cdhlag <- cdhlag
+cdhbics <- rep(0, 11)
+for(nlags in 0:10) {
+  cdhlag <- createCdhLag(nlags,
+                         readings.aggregate)
+  readings.aggregate$cdhlag <- cdhlag
+  
+  glm.timetou.opt.FT <- bic.glm(f = kwh ~ (cdhlag + month + tou_period + billing_active)^2, 
+                                data = readings.aggregate, 
+                                glm.family = "gaussian", # TODO: I think Gaussian is good
+                                nbest = 1,
+                                factor.type = TRUE)
+  cdhbics[nlags + 1] <- glm.timetou.opt.FT$bic
+  # imageplot.bma(glm.timetou.opt.FT)
+}
+plot(cdhbics,
+     xlab = "CDH (hours lag)", 
+     ylab = "BIC of Optimal GLM",
+     main = "BIC of Models Using Varioud CDH Lags",
+     type = "l")
+
+
+
 
 ##
 # Strip two data frames down to TOU Period (+others) and 
