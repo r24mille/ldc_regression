@@ -11,6 +11,7 @@ library(segmented)
 # Source the function in another file
 source('piecewise_cdh_setpoint.R')
 source('reg_subset_visualization.R')
+source('createCdhLag.R')
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -150,177 +151,81 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 ##
 # CDH with 1-3 hour lags.
 ##
-createCdhLag <- function(nlags, readingsdf) {
-  cdhlag <- rep(0, nrow(readingsdf)) # Prealloate cdhlag vector
-  
-  # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(readingsdf)) {
-    cdhlag[i] <- readingsdf[i, "cdh"]
-    tmplg <- 1
-    
-    # Sum what we can or all the values up to nlags
-    while (i-tmplg > 0 & tmplg <= nlags) {
-      cdhlag[i] <- cdhlag[i] + readingsdf[i-tmplg, "cdh"]
-      tmplg <- tmplg + 1
-    }
-  }
-  
-  return(cdhlag)
-}
 nlags = 1
 cdhlag <- createCdhLag(nlags,
                        readings.aggregate)
 readings.aggregate$cdhlag <- cdhlag
-
-
-##
-# A linear model will be build using lm(...) for each model variant.
-##
-
-# Temperature, TOU Period, and billing method modeled as fixed effects using 
-# using coefficients for main effects only.
-model.lm.fe.main.tmp_prd_bill <- lm(kwh ~ temperature + tou_period + billing_active, 
-                                    data = readings.aggregate)
-summary(model.lm.fe.main.tmp_prd_bill)
-AIC(model.lm.fe.main.tmp_prd_bill)
-anova(model.lm.fe.main.tmp_prd_bill)
-
-# Temperature, TOU Period, and billing method modeled as fixed effects using 
-# using coefficients of main effects and all interactions.
-model.lm.fe.inter.tmp_prd_bill <- lm(kwh ~ temperature * tou_period * billing_active, 
-                                         data = readings.aggregate)
-summary(model.lm.fe.inter.tmp_prd_bill)
-AIC(model.lm.fe.inter.tmp_prd_bill)
-anova(model.lm.fe.inter.tmp_prd_bill)
-
-# Temperature, hour of day, and billing method modeled as fixed effects using 
-# using coefficients for main effects only.
-model.lm.fe.main.tmp_hr_bill <- lm(kwh ~ temperature + hrstr + billing_active, 
-                                    data = readings.aggregate)
-summary(model.lm.fe.main.tmp_hr_bill)
-AIC(model.lm.fe.main.tmp_hr_bill)
-anova(model.lm.fe.main.tmp_hr_bill)
-
-# Temperature, hour of day, and billing method modeled as fixed effects using 
-# using coefficients of main effects and all interactions.
-model.lm.fe.inter.tmp_hr_bill <- lm(kwh ~ temperature * hrstr * billing_active, 
-                                     data = readings.aggregate)
-summary(model.lm.fe.inter.tmp_hr_bill)
-AIC(model.lm.fe.inter.tmp_hr_bill)
-anova(model.lm.fe.inter.tmp_hr_bill)
-
-# Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
-# using using coefficients for main effects only.
-model.lm.fe.main.cdh_prd_bill <- lm(kwh ~ cdh + tou_period + billing_active, 
-                                    data = readings.aggregate)
-summary(model.lm.fe.main.cdh_prd_bill)
-AIC(model.lm.fe.main.cdh_prd_bill)
-anova(model.lm.fe.main.cdh_prd_bill)
-
-# Cooling-Degree Hour, TOU Period, and billing method modeled as fixed effects
-# using using coefficients of main effects and all interactions.
-model.lm.fe.inter.cdh_prd_bill <- lm(kwh ~ cdh * tou_period * billing_active, 
-                                     data = readings.aggregate)
-summary(model.lm.fe.inter.cdh_prd_bill)
-AIC(model.lm.fe.inter.cdh_prd_bill)
-anova(model.lm.fe.inter.cdh_prd_bill)
-
-# Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
-# using using coefficients for main effects only.
-model.lm.fe.main.cdh_hr_bill <- lm(kwh ~ cdh + hrstr + billing_active, 
-                                   data = readings.aggregate)
-summary(model.lm.fe.main.cdh_hr_bill)
-AIC(model.lm.fe.main.cdh_hr_bill)
-anova(model.lm.fe.main.cdh_hr_bill)
-
-# Cooling-Degree Hour, hour of day, and billing method modeled as fixed effects
-# using using coefficients of main effects and all interactions.
-model.lm.fe.inter.cdh_hr_bill <- lm(kwh ~ cdh * hrstr * billing_active, 
-                                    data = readings.aggregate)
-summary(model.lm.fe.inter.cdh_hr_bill)
-AIC(model.lm.fe.inter.cdh_hr_bill)
-anova(model.lm.fe.inter.cdh_hr_bill)
-
-
-
-
-# Experimentation area to try and fit as many fixed effects as possible for the
-# highest descriptive power (regardless of AIC or meaning)
-supamodel.lm <- lm(kwh ~ cdh + hrstr + weekend + tou_period + billing_active + cdh:hrstr + hrstr:weekend + cdh:billing_active + weekend:billing_active + tou_period:billing_active + cdh:weekend:billing_active,
-                   data = readings.aggregate)
-summary(supamodel.lm)
-AIC(supamodel.lm)
-anova(supamodel.lm)
-
-# Experimentation area to try and fit as many fixed effects as possible for the
-# highest descriptive power (regardless of AIC or meaning)
-supamodel.lm.1lag <- lm(kwh ~ cdh_1lag + hrstr + weekend + tou_period + billing_active + cdh_1lag:hrstr + hrstr:weekend + cdh_1lag:billing_active + weekend:billing_active + tou_period:billing_active + cdh_1lag:weekend:billing_active,
-                   data = readings.aggregate)
-summary(supamodel.lm.1lag)
-AIC(supamodel.lm.1lag)
-anova(supamodel.lm.1lag)
-
-# Experimentation area to try and fit as many fixed effects as possible for the
-# highest descriptive power (regardless of AIC or meaning)
-supamodel.lm.2lag <- lm(kwh ~ cdh_2lag + hrstr + weekend + tou_period + billing_active + cdh_2lag:hrstr + hrstr:weekend + cdh_2lag:billing_active + weekend:billing_active + tou_period:billing_active + cdh_2lag:weekend:billing_active,
-                   data = readings.aggregate)
-summary(supamodel.lm.2lag)
-AIC(supamodel.lm.2lag)
-anova(supamodel.lm.2lag)
-
-# Experimentation area to try and fit as many fixed effects as possible for the
-# highest descriptive power (regardless of AIC or meaning)
-supamodel.lm.3lag <- lm(kwh ~ cdh_3lag*hrstr*weekend*tou_period*billing_active*price,
-                        data = readings.aggregate)
-summary(supamodel.lm.3lag)
-AIC(supamodel.lm.3lag)
-anova(supamodel.lm.3lag)
-
-
 
 ##
 # Strip two data frames down to TOU Period (+others) and 
 # "time components" (+others). Then use bestglm to determine the best 
 # combination of fixed effects for each class of model.
 readings.aggregate.timetou <- subset(readings.aggregate, 
-                                    select = c(cdh_1lag, 
+                                    select = c(cdhlag, 
                                                month, 
                                                tou_period, 
                                                billing_active,
                                                kwh))
 
 readings.aggregate.timecomponents <- subset(readings.aggregate, 
-                                            select = c(cdh_1lag, 
+                                            select = c(cdhlag, 
                                                        month, 
                                                        hrstr, 
                                                        weekend, 
                                                        price, 
                                                        billing_active, 
                                                        kwh))
-regss.fe.timetou <- regsubsets(kwh ~ cdh_1lag*month*tou_period*billing_active, 
+
+regss.fe.timetou <- regsubsets(kwh ~ cdhlag*month*tou_period*billing_active, 
                             data = readings.aggregate.timetou,
                             method = "backward", 
                             nvmax = 500)
 
-regss.fe.timetou.summary <- summary(regss.fe.timetou)
-regss.fe.timetou.summary$which[60,]
+regss.fe.timetou.summary <- summary(regss.fe.timetou, 
+                                    matrix = TRUE,
+                                    matrix.logical = TRUE)
+regss.fe.timetou.optidx <- which.min(regss.fe.timetou.summary$bic)
 plotRegSubSets(regss.fe.timetou.summary$bic, 
                regss.fe.timetou.summary$adjr2, 
                "Automated 'TOU Period' Model Identification")
 
 # Use the TRUE/FALSE summary from .which to get the optimal factor values as 
 # a model string.
-regss.fe.timetou.optstr <- apply(regss.fe.timetou.summary$which[60,], 
-                                 1, 
-                                 function(u) paste( names(which(u)), 
-                                                    collapse = "+" ) 
-)
-model.fe.timetou.optimal <- lm(paste("kwh ~", ),
-                               data = readings.aggregate)
+optwhich <- as.data.frame(regss.fe.timetou.summary$which[regss.fe.timetou.optidx,])
+colnames(optwhich) <- c("included")
+optwhich <- subset(optwhich,
+                   included == TRUE)
+optwhich <- tail(optwhich, regss.fe.timetou.optidx) # Trim (Intercept)
+# model.fe.timetou.festring <- paste(rownames(optwhich), 
+#                                    collapse = " + ")
+# model.fe.timetou.optimal.formula <- as.formula(paste("kwh ~ ", 
+#                                                      model.fe.timetou.festring))
+model.fe.timetou.a <- lm(kwh ~ cdhlag + month + tou_period + cdhlag:month + cdhlag:tou_period + month:tou_period + month:billing_active + cdhlag:month:tou_period + cdhlag:month:billing_active + cdhlag:tou_period:billing_active,
+                       data = readings.aggregate)
+summary(model.fe.timetou.a)
+AIC(model.fe.timetou.a)
+
+model.fe.timetou.b <- lm(kwh ~ cdhlag:month:tou_period + cdhlag:month:billing_active + cdhlag:tou_period:billing_active,
+                         data = readings.aggregate)
+summary(model.fe.timetou.b)
+AIC(model.fe.timetou.b)
+plot(model.fe.timetou.b)
 
 
 
-regss.fe.timecomponents <- regsubsets(kwh ~ cdh_1lag*month*hrstr*weekend*price*billing_active, 
+
+
+
+##
+# Stepwise deletion
+model.timetou.maximal <- lm(kwh ~ cdhlag * month * tou_period * billing_active, 
+                            data = readings.aggregate)
+summary(model.timetou.maximal)
+
+
+
+
+regss.fe.timecomponents <- regsubsets(kwh ~ cdhlag*month*hrstr*weekend*price*billing_active, 
                                data = readings.aggregate.timecomponents,
                                method = "backward", 
                                nvmax = 1000)
