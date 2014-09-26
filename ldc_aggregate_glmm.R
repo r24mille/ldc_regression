@@ -6,6 +6,7 @@ library(stargazer) # LaTeX tables
 library(bestglm) # Compare models using leaps
 library(glmulti)
 library(segmented)
+library(BMA)
 
 
 # Source the function in another file
@@ -221,9 +222,223 @@ plot(model.fe.timetou.b)
 model.timetou.maximal <- lm(kwh ~ cdhlag * month * tou_period * billing_active, 
                             data = readings.aggregate)
 summary(model.timetou.maximal)
+anova(model.timetou.maximal)
+
+# Step 1
+model.timetou.step1 <- update(model.timetou.maximal, 
+                              ~.- cdhlag:billing_active)
+summary(model.timetou.step1)
+anova(model.timetou.step1)
+anova(model.timetou.maximal, model.timetou.step1)
+
+# Step 2
+model.timetou.step2 <- update(model.timetou.step1, 
+                              ~.- cdhlag:tou_period:billing_active)
+summary(model.timetou.step2)
+anova(model.timetou.step2)
+anova(model.timetou.step1, model.timetou.step2)
+
+# Step 3
+model.timetou.step3 <- update(model.timetou.step2, 
+                              ~.- cdhlag:month:billing_active)
+summary(model.timetou.step3)
+anova(model.timetou.step3)
+anova(model.timetou.step2, model.timetou.step3)
+
+# Step 4
+model.timetou.step4 <- update(model.timetou.step3, 
+                              ~.- cdhlag:month:tou_period)
+summary(model.timetou.step4)
+anova(model.timetou.step4)
+anova(model.timetou.step3, model.timetou.step4)
+
+# Step 5
+model.timetou.step5 <- update(model.timetou.step4, 
+                              ~.- month:tou_period)
+summary(model.timetou.step5)
+anova(model.timetou.step5)
+anova(model.timetou.step4, model.timetou.step5)
+
+# Step 6
+model.timetou.step6 <- update(model.timetou.step5, 
+                              ~.- cdhlag:tou_period)
+summary(model.timetou.step6)
+anova(model.timetou.step6)
+anova(model.timetou.step5, model.timetou.step6)
+
+# Step 7
+model.timetou.step7 <- update(model.timetou.step6, 
+                              ~.- cdhlag:month)
+summary(model.timetou.step7)
+anova(model.timetou.step7)
+anova(model.timetou.step6, model.timetou.step7)
+
+# Step 8
+model.timetou.step8 <- update(model.timetou.step7, 
+                              ~.- tou_period:billing_active)
+summary(model.timetou.step8)
+anova(model.timetou.step8)
+anova(model.timetou.step7, model.timetou.step8)
+
+# Step 9
+model.timetou.step9 <- update(model.timetou.step8, 
+                              ~.- month:billing_active)
+summary(model.timetou.step9)
+anova(model.timetou.step9)
+anova(model.timetou.step8, model.timetou.step9)
+
+# Step 10
+model.timetou.step10 <- update(model.timetou.step9, 
+                              ~.- billing_active)
+summary(model.timetou.step10)
+anova(model.timetou.step10)
+anova(model.timetou.step9, model.timetou.step10)
+
+# Step 11
+model.timetou.step11 <- update(model.timetou.step10, 
+                               ~.- tou_period)
+summary(model.timetou.step11)
+anova(model.timetou.step11)
+anova(model.timetou.step10, model.timetou.step11)
+
+# Step 12
+model.timetou.step12 <- update(model.timetou.step11, 
+                               ~.- month)
+summary(model.timetou.step12)
+anova(model.timetou.step12)
+anova(model.timetou.step11, model.timetou.step12)
+
+# Step 13
+model.timetou.step13 <- update(model.timetou.step12, 
+                               ~.- cdhlag)
+summary(model.timetou.step13)
+anova(model.timetou.step13)
+anova(model.timetou.step12, model.timetou.step13)
 
 
+####
+# HOLD UP...
+####
+glm.timetou.maximal <- glm(kwh ~ cdhlag * month * tou_period * billing_active, 
+                           data = readings.aggregate)
+summary(glm.timetou.maximal)
+anova(glm.timetou.maximal)
 
+# Step 1
+glm.timetou.step1 <- update(glm.timetou.maximal,
+                            ~.- cdhlag:month:tou_period:billing_active)
+summary(glm.timetou.step1)
+anova(glm.timetou.step1)
+anova(glm.timetou.maximal, glm.timetou.step1, test="Chi")
+qchisq(.95, 23) 
+# 3.3 increase in deviance is significantly below 35.2 allowed by 
+# qchisq(...). This simplification is justified.
+
+# Step 2
+glm.timetou.step2 <- update(glm.timetou.step1,
+                            ~.- month:tou_period:billing_active)
+summary(glm.timetou.step2)
+anova(glm.timetou.step2)
+anova(glm.timetou.step1, glm.timetou.step2, test="Chi")
+qchisq(.95, 25)
+# 3.2 increase in deviance is significantly below 37.7 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 3
+glm.timetou.step3 <- update(glm.timetou.step2,
+                            ~.- cdhlag:tou_period:billing_active)
+summary(glm.timetou.step3)
+anova(glm.timetou.step3)
+anova(glm.timetou.step2, glm.timetou.step3)
+qchisq(.95, 5)
+# 0.6 increase in deviance is significantly below 11.1 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 4
+glm.timetou.step4 <- update(glm.timetou.step3,
+                            ~.- cdhlag:month:billing_active)
+summary(glm.timetou.step4)
+anova(glm.timetou.step4)
+anova(glm.timetou.step3, glm.timetou.step4)
+qchisq(.95, 5)
+# 1.9 increase in deviance is significantly below 11.1 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 5
+glm.timetou.step5 <- update(glm.timetou.step4,
+                            ~.- cdhlag:month:tou_period)
+summary(glm.timetou.step5)
+anova(glm.timetou.step5)
+anova(glm.timetou.step4, glm.timetou.step5)
+qchisq(.95, 24)
+# 10.4 increase in deviance is significantly below 36.4 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 6
+glm.timetou.step6 <- update(glm.timetou.step5,
+                            ~.- tou_period:billing_active)
+summary(glm.timetou.step6)
+anova(glm.timetou.step6)
+anova(glm.timetou.step5, month:billing_active)
+qchisq(.95, 5)
+# 1.4 increase in deviance is significantly below 11.1 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 7
+glm.timetou.step7 <- update(glm.timetou.step6,
+                            ~.- month:billing_active)
+summary(glm.timetou.step7)
+anova(glm.timetou.step7)
+anova(glm.timetou.step6, glm.timetou.step7)
+qchisq(.95, 5)
+# 1.4 increase in deviance is significantly below 11.1 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 8
+glm.timetou.step8 <- update(glm.timetou.step7,
+                            ~.- cdhlag:billing_active)
+summary(glm.timetou.step8)
+anova(glm.timetou.step8)
+anova(glm.timetou.step7, glm.timetou.step8)
+qchisq(.95, 1)
+# 0.1 increase in deviance is significantly below 3.8 allowed by 
+# qchisq(...). This simplification is justified.
+
+#Step 9
+glm.timetou.step9 <- update(glm.timetou.step8,
+                            ~.- cdhlag:tou_period)
+summary(glm.timetou.step9)
+anova(glm.timetou.step9)
+anova(glm.timetou.step8, glm.timetou.step9)
+# 17.5 increase in deviance is below 37.7 allowed by qchisq(...). This 
+# simplification is justified.
+
+plot(c(BIC(glm.timetou.maximal), 
+       BIC(glm.timetou.step1), 
+       BIC(glm.timetou.step2), 
+       BIC(glm.timetou.step3), 
+       BIC(glm.timetou.step4), 
+       BIC(glm.timetou.step5), 
+       BIC(glm.timetou.step6), 
+       BIC(glm.timetou.step7),
+       BIC(glm.timetou.step8),
+       BIC(glm.timetou.step9)),
+     ylab = "BIC")
+
+glm.timetou.opt.FT <- bic.glm(f = kwh ~ cdhlag*tou_period*billing_active + month + cdhlag:month + tou_period:month + billing_active:month, 
+                             data = readings.aggregate.timetou, 
+                             glm.family = "gaussian", # TODO: I think Gaussian is good
+                             factor.type = TRUE)
+bma.timetou.summary <- summary(glm.timetou.opt.FT)
+imageplot.bma(glm.timetou.opt.FT)
+
+
+# Plotzzzz
+par(mfrow=c(2,2)) 
+plot(kwh~cdhlag, col="red", data=readings.aggregate) 
+plot(kwh~month, col="blue", data=readings.aggregate) 
+plot(kwh~tou_period, col="green", data=readings.aggregate)
+plot(kwh~billing_active, col="yellow", data=readings.aggregate)
 
 regss.fe.timecomponents <- regsubsets(kwh ~ cdhlag*month*hrstr*weekend*price*billing_active, 
                                data = readings.aggregate.timecomponents,
