@@ -41,7 +41,7 @@ CreateCdhLagMatrix <- function(nlags, readingsdf) {
   #   own coefficient when modelled.
   lagnames <- paste0("lag", c(0:nlags))
   cdhlags <- matrix(nrow = nrow(readingsdf),
-                   ncol = (nlags + 1))
+                    ncol = (nlags + 1))
   colnames(cdhlags) <- lagnames
   
   # Unfortunately iterating over the dataframe seems to be the best method
@@ -58,7 +58,7 @@ CreateCdhLagMatrix <- function(nlags, readingsdf) {
   return(cdhlags)
 }
 
-CdhLagSumMaximalFormula <- function() {
+CdhLagMaximalFormula <- function() {
   # Summed CDH lags can be incorporated into a GLM easily, testing the main 
   # effects of the column as well as two-way interractions with each other 
   # column. This function returns the forumla for summed
@@ -69,7 +69,8 @@ CdhLagSumMaximalFormula <- function() {
   return(formula("kwh ~ (.)^2"))
 }
 
-CdhLagMatMaximalFormula <- function(cdhlagmat.minimaldf, cdhlagmat.colnames) {
+CdhLagMaximalNestedFormula <- function(cdhlagmat.minimaldf, 
+                                       cdhlagmat.colnames) {
   # Each CDH lag into the past may be provided as its own column in the 
   # dataframe and modelled as nested fixed effects and two-way interractions 
   # between all fixed effects.

@@ -5,6 +5,7 @@ library(BMA) # Compare GLM models
 # Source the function in another file
 source('reg_subset_visualization.R')
 source('cdh_lag_methods.R')
+source('tou_time_methods.R')
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -70,106 +71,26 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 # Find the optimal number of hours lag, and the best method for incorporating 
 # CDH. Is it best to sum up current and past hours, similar to traditional CDH 
 # or should previous hours be nested under the current hour?
-
-# Trim the columns down from full readings.aggregate to only those needed 
-# when working with "TOU Period" version of the model.
-trimColsToTimeTou <- function(readingdf) {
-  timetoudf <- readingdf[, ! colnames(readingdf) %in% c("daynum", 
-                                                        "hour", 
-                                                        "timestamp_dst", 
-                                                        "temperature", 
-                                                        "agg_count", 
-                                                        "hrstr", 
-                                                        "weekend", 
-                                                        "price", 
-                                                        "cdh")]
-  return(timetoudf)
-}
-
-# Trim the columns down from full readings.aggregate to only those needed 
-# when working with "Components of TOU" version of the model.
-trimColsToTimeComponents <- function(readingdf) {
-  timecompdf <- readingdf[, ! colnames(readingdf) %in% c("daynum", 
-                                                         "hour", 
-                                                         "timestamp_dst", 
-                                                         "temperature", 
-                                                         "agg_count", 
-                                                         "tou_period", 
-                                                         "cdh")]
-  return(timecompdf)
-}
-
-# Summed CDH lags can be incorporated into a GLM easily, testing the main 
-# effects of the column as well as two-way interractions with each other column.
-findBmaCdhLagSum <- function(df) {
-  bma.res <- bic.glm(f = kwh ~ .,
-                    data = df,
-                    glm.family = "gaussian", 
-                    factor.type = TRUE)
-  return(bma.res)
-}
-
-# The matrix of CDH lags (ie. hours in the past) should be modeled as a nested 
-# relationship and then incorporated into the main effects of the nested 
-# terms and their two-way interractions with each other fixed effect.
-#
-# This gets a bit tricky to create in a reusable fashion for a changing number 
-# of columns (ie. lag0, lag1, ..., lagn). So a string for the nested term 
-# is constructed with the help of cdhlagmatcolnames. This string is then 
-# stitched as a formula string and then passed to Bayesian Model 
-# Averaging (BMA).
-findBmaCdhLagMat <- function(df, cdhlagmatcolnames) {
-  fecolnames <- colnames(df[, ! colnames(df) %in% c(cdhlagmatcolnames, "kwh")]) # Optimize
-  mainstr <- paste(fecolnames,
-                   collapse = " + ")
-  nestedstr <- paste(cdhlagmatcolnames,
-                     collapse = "/")
-  nested.formulastr <- paste0("kwh ~ (",
-                         mainstr,
-                         ")^2 + ",
-                         nestedstr)
-  
-  bma.res <- bic.glm(f = formula(nested.formulastr),
-                    data = df,
-                    glm.family = "gaussian", 
-                    factor.type = TRUE)
-  return(bma.res)
-}
-
-nlags <- 4
-cdhsumbics <- rep(0, (nlags + 1))
-cdhmatbics <- rep(0, (nlags + 1))
-cdhmatdeviances <- rep(0, (nlags + 1))
+nlags <- 24
+cdhlagmat.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 2,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AIC")))
 for(i in 0:nlags) {
-  # Summed CDH for nlag
-  cdhlagsums <- createCdhLagSum(i, readings.aggregate)
-  readings.aggregate.cdhsum <- cbind(readings.aggregate, 
-                                     cdhlagsums)
-  readings.aggregate.cdhsum.timetou <- trimColsToTimeTou(readings.aggregate.cdhsum)
-  bma.cdhsum.timetou <- findBmaCdhLagSum(readings.aggregate.cdhsum.timetou)
-  cdhsumbics[i + 1] <- mean(bma.cdhsum.timetou$bic)
+  # Matrix of CDH lags, TOU as periods
+  cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
+  readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
+                                        cdhlagmat)
+  cdhlagmat.touperiods <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.touperiods.maxfmla <- CdhLagMaximalFormula()
+  # TODO(r24mille): Justify use of Gamma over gaussian
+  cdhlagmat.touperiods.maxglm <- glm(formula = cdhlagmat.touperiods.maxfmla, 
+                                          data = cdhlagmat.touperiods,
+                                          family = Gamma)
   
-  # Matrix of CDH lags
-  cdhlagmat <- createCdhLagMatrix(i, readings.aggregate)
-  readings.aggregate.cdhmat <- cbind(readings.aggregate, 
-                                     cdhlagmat)
-  readings.aggregate.cdhmat.timetou <- trimColsToTimeTou(readings.aggregate.cdhmat)
-  bma.cdhmat.timetou <- findBmaCdhLagMat(readings.aggregate.cdhmat.timetou, 
-                                         colnames(cdhlagmat))
-  cdhmatbics[i + 1] <- mean(bma.cdhmat.timetou$bic)
-  cdhmatdeviances[i + 1] <- mean(bma.cdhmat.timetou$deviance)
+  cdhlagmat.touperiods.maxglm.pwr[(i+1), 1] <- cdhlagmat.touperiods.maxglm$deviance
+  cdhlagmat.touperiods.maxglm.pwr[(i+1), 2] <- cdhlagmat.touperiods.maxglm$aic
 }
 
-# Plot the evolution of BIC as different CDH lags are used.
-plot(cdhmatbics,
-     xlab = "CDH (hours lag)", 
-     ylab = "Average BIC of Best GLMs",
-     main = "BIC of Models as the Hours in CDH Increase",
-     type = "l")
 
-# Plot the evolution of BIC as different CDH lags are used.
-plot(cdhmatdeviances,
-     xlab = "CDH (hours lag)", 
-     ylab = "Average Deviance of Best GLMs",
-     main = "Deviances of Best GLM Models as the Hours in CDH Increase",
-     type = "l")

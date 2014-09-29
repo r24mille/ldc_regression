@@ -1,4 +1,4 @@
-plotRegSubSets <- function (bics, adjr2s, title) {
+PlotRegSubSets <- function (bics, adjr2s, title) {
   # Adjust padding for labelling on the y2 axis
   par(mar=c(5,4,4,5)+.1)
   xrng = c(1, length(bics))
