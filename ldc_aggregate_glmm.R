@@ -57,9 +57,10 @@ readings.aggregate$price <- factor(readings.aggregate$price,
 # Use 'segmented' package rather than my prior home-grown method of finding 
 # the optimal cooling degree hour breakpoint (though they give the same 
 # result).
-model.readings.lm.presegment <- glm(kwh ~ temperature*tou_period*billing_active,
-                                   data = readings.aggregate)
-seg <- segmented(obj = model.readings.lm.presegment, 
+model.readings.glm.presegment <- glm(kwh ~ temperature*tou_period*billing_active,
+                                   data = readings.aggregate,
+                                   family = Gamma)
+seg <- segmented(obj = model.readings.glm.presegment, 
                  seg.Z = ~temperature,
                  psi = list(temperature = c(18)))
 cdhbreak <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
@@ -71,7 +72,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 # Find the optimal number of hours lag, and the best method for incorporating 
 # CDH. Is it best to sum up current and past hours, similar to traditional CDH 
 # or should previous hours be nested under the current hour?
-nlags <- 24
+nlags <- 4
 cdhlagmat.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
                                           ncol = 2,
                                           dimnames = list(c(0:nlags),
@@ -84,13 +85,13 @@ for(i in 0:nlags) {
                                         cdhlagmat)
   cdhlagmat.touperiods <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
   cdhlagmat.touperiods.maxfmla <- CdhLagMaximalFormula()
-  # TODO(r24mille): Justify use of Gamma over gaussian
+  # maxagg <- max(readings.aggregate.cdhlagmat$agg_count)
+  # wghts <- readings.aggregate.cdhlagmat$agg_count/maxagg
   cdhlagmat.touperiods.maxglm <- glm(formula = cdhlagmat.touperiods.maxfmla, 
                                           data = cdhlagmat.touperiods,
+                                          # weights = wghts, 
                                           family = Gamma)
   
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 1] <- cdhlagmat.touperiods.maxglm$deviance
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 2] <- cdhlagmat.touperiods.maxglm$aic
 }
-
-
