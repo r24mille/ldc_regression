@@ -41,7 +41,8 @@ readings.aggregate$weekend <- ifelse(readings.aggregate$tou_period %in% c("off_w
                                      "Yes",
                                      "No")
 readings.aggregate$weekend <- factor(readings.aggregate$weekend, 
-                                     unique(readings.aggregate$weekend))
+                                     c("No", 
+                                       "Yes"))
 
 ##
 # Add column which converts TOU Period to its price level
@@ -88,7 +89,75 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 # Find the optimal number of hours lag, and the best method for incorporating 
 # CDH. Is it best to sum up current and past hours, similar to traditional CDH 
 # or should previous hours be nested under the current hour?
-nlags <- 26
+#
+# TODO(r24mille): Resid. Dev is lower with link="log". Justify this choice.
+# TODO(r24mille): This whole section could be two nicely built functions
+nlags <- 2
+
+# 1. Summed CDH lags, TOU as periods
+cdhlagsum.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 3,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AICc",
+                                                            "BIC")))
+for(i in 0:nlags) {
+  cdhlagsum <- CreateCdhLagSum(i, readings.aggregate)
+  readings.aggregate.cdhlagsum <- cbind(readings.aggregate, 
+                                        cdhlagsum)
+  cdhlagsum.touperiods <- TrimColsTouPeriods(readings.aggregate.cdhlagsum)
+  cdhlagsum.touperiods.maxfmla <- CdhLagMaximalFormula()
+  cdhlagsum.touperiods.maxglm <- glm(formula = cdhlagsum.touperiods.maxfmla, 
+                                     data = cdhlagsum.touperiods,
+                                     weights = wghts, 
+                                     family = Gamma(link="log")) 
+  
+  cdhlagsum.touperiods.maxglm.pwr[(i+1), 1] <- cdhlagsum.touperiods.maxglm$deviance
+  cdhlagsum.touperiods.maxglm.pwr[(i+1), 2] <- AICc(cdhlagsum.touperiods.maxglm)
+  cdhlagsum.touperiods.maxglm.pwr[(i+1), 3] <- BIC(cdhlagsum.touperiods.maxglm)
+}
+PlotGlmFitMeasures(aiccs = cdhlagsum.touperiods.maxglm.pwr[, 2], 
+                   bics = cdhlagsum.touperiods.maxglm.pwr[, 3], 
+                   resdevs = cdhlagsum.touperiods.maxglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Period, Degrees>", 
+                                            CDH['break'], 
+                                            " Summed")))
+
+# 2. Matrix of CDH lags as nested interactions, TOU as periods
+cdhlagmat.touperiods.nestedglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 3,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AICc",
+                                                            "BIC")))
+for(i in 0:nlags) {
+  cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
+  readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
+                                        cdhlagmat)
+  cdhlagmat.touperiods <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.touperiods.nestedfmla <- CdhLagMaximalNestedFormula(cdhlagmat.touperiods,
+                                                                colnames(cdhlagmat))
+  cdhlagmat.touperiods.nestedglm <- glm(formula = cdhlagmat.touperiods.nestedfmla, 
+                                     data = cdhlagmat.touperiods,
+                                     weights = wghts, 
+                                     family = Gamma(link="log")) 
+  
+  cdhlagmat.touperiods.nestedglm.pwr[(i+1), 1] <- cdhlagmat.touperiods.nestedglm$deviance
+  cdhlagmat.touperiods.nestedglm.pwr[(i+1), 2] <- AICc(cdhlagmat.touperiods.nestedglm)
+  cdhlagmat.touperiods.nestedglm.pwr[(i+1), 3] <- BIC(cdhlagmat.touperiods.nestedglm)
+}
+PlotGlmFitMeasures(aiccs = cdhlagmat.touperiods.nestedglm.pwr[, 2], 
+                   bics = cdhlagmat.touperiods.nestedglm.pwr[, 3], 
+                   resdevs = cdhlagmat.touperiods.nestedglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Period, Degrees>", 
+                                            CDH['break'], 
+                                            " as Coefficients w/ Nested Interaction")))
+
+# 3. Matrix of CDH lags as two-way interactions, TOU as periods
 cdhlagmat.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
                                           ncol = 3,
                                           dimnames = list(c(0:nlags),
@@ -96,7 +165,6 @@ cdhlagmat.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
                                                             "AICc",
                                                             "BIC")))
 for(i in 0:nlags) {
-  # Matrix of CDH lags, TOU as periods
   cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
   readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
                                         cdhlagmat)
@@ -106,9 +174,110 @@ for(i in 0:nlags) {
                                           data = cdhlagmat.touperiods,
                                           weights = wghts, 
                                           family = Gamma(link="log")) 
-  # TODO(r24mille): Resid. Dev is lower with link="log". Justify this choice.
   
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 1] <- cdhlagmat.touperiods.maxglm$deviance
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 2] <- AICc(cdhlagmat.touperiods.maxglm)
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 3] <- BIC(cdhlagmat.touperiods.maxglm)
 }
+PlotGlmFitMeasures(aiccs = cdhlagmat.touperiods.maxglm.pwr[, 2], 
+                   bics = cdhlagmat.touperiods.maxglm.pwr[, 3], 
+                   resdevs = cdhlagmat.touperiods.maxglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Period, Degrees>", 
+                                            CDH['break'], 
+                                            " as Coefficients w/ All 2-Way Interactions")))
+
+# 4. Summed CDH lags, TOU components of time
+cdhlagsum.toucomps.maxglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 3,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AICc",
+                                                            "BIC")))
+for(i in 0:nlags) {
+  cdhlagsum <- CreateCdhLagSum(i, readings.aggregate)
+  readings.aggregate.cdhlagsum <- cbind(readings.aggregate, 
+                                        cdhlagsum)
+  cdhlagsum.toucomps <- TrimColsTouTimeComponents(readings.aggregate.cdhlagsum)
+  cdhlagsum.toucomps.maxfmla <- CdhLagMaximalFormula()
+  cdhlagsum.toucomps.maxglm <- glm(formula = cdhlagsum.toucomps.maxfmla, 
+                                     data = cdhlagsum.toucomps,
+                                     weights = wghts, 
+                                     family = Gamma(link="log")) 
+  
+  cdhlagsum.toucomps.maxglm.pwr[(i+1), 1] <- cdhlagsum.toucomps.maxglm$deviance
+  cdhlagsum.toucomps.maxglm.pwr[(i+1), 2] <- AICc(cdhlagsum.toucomps.maxglm)
+  cdhlagsum.toucomps.maxglm.pwr[(i+1), 3] <- BIC(cdhlagsum.toucomps.maxglm)
+}
+PlotGlmFitMeasures(aiccs = cdhlagsum.toucomps.maxglm.pwr[, 2], 
+                   bics = cdhlagsum.toucomps.maxglm.pwr[, 3], 
+                   resdevs = cdhlagsum.toucomps.maxglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Components, Degrees>", 
+                                            CDH['break'], 
+                                            " Summed")))
+
+# 5. Matrix of CDH lags as nested interactions, TOU components of time
+cdhlagmat.toucomps.nestedglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 3,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AICc",
+                                                            "BIC")))
+for(i in 0:nlags) {
+  cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
+  readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
+                                        cdhlagmat)
+  cdhlagmat.toucomps <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.toucomps.nestedfmla <- CdhLagMaximalNestedFormula(cdhlagmat.toucomps,
+                                                           colnames(cdhlagmat))
+  cdhlagmat.toucomps.nestedglm <- glm(formula = cdhlagmat.toucomps.nestedfmla, 
+                                     data = cdhlagmat.toucomps,
+                                     weights = wghts, 
+                                     family = Gamma(link="log")) 
+  
+  cdhlagmat.toucomps.nestedglm.pwr[(i+1), 1] <- cdhlagmat.toucomps.nestedglm$deviance
+  cdhlagmat.toucomps.nestedglm.pwr[(i+1), 2] <- AICc(cdhlagmat.toucomps.nestedglm)
+  cdhlagmat.toucomps.nestedglm.pwr[(i+1), 3] <- BIC(cdhlagmat.toucomps.nestedglm)
+}
+PlotGlmFitMeasures(aiccs = cdhlagmat.toucomps.nestedglm.pwr[, 2], 
+                   bics = cdhlagmat.toucomps.nestedglm.pwr[, 3], 
+                   resdevs = cdhlagmat.toucomps.nestedglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Components, Degrees>", 
+                                            CDH['break'], 
+                                            " as Coefficients w/ Nested Interaction")))
+
+# 6. Matrix of CDH lags as two-way interactions, TOU components of time
+cdhlagmat.toucomps.maxglm.pwr <- matrix(nrow = (nlags + 1),
+                                          ncol = 3,
+                                          dimnames = list(c(0:nlags),
+                                                          c("ResidualDeviance", 
+                                                            "AICc",
+                                                            "BIC")))
+for(i in 0:nlags) {
+  cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
+  readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
+                                        cdhlagmat)
+  cdhlagmat.toucomps <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.toucomps.maxfmla <- CdhLagMaximalFormula()
+  cdhlagmat.toucomps.maxglm <- glm(formula = cdhlagmat.toucomps.maxfmla, 
+                                     data = cdhlagmat.toucomps,
+                                     weights = wghts, 
+                                     family = Gamma(link="log")) 
+  
+  cdhlagmat.toucomps.maxglm.pwr[(i+1), 1] <- cdhlagmat.toucomps.maxglm$deviance
+  cdhlagmat.toucomps.maxglm.pwr[(i+1), 2] <- AICc(cdhlagmat.toucomps.maxglm)
+  cdhlagmat.toucomps.maxglm.pwr[(i+1), 3] <- BIC(cdhlagmat.toucomps.maxglm)
+}
+PlotGlmFitMeasures(aiccs = cdhlagmat.toucomps.maxglm.pwr[, 2], 
+                   bics = cdhlagmat.toucomps.maxglm.pwr[, 3], 
+                   resdevs = cdhlagmat.toucomps.maxglm.pwr[, 1], 
+                   xvals = c(0:nlags), 
+                   xtitle = "Number of Past Hours Included", 
+                   title = expression(paste("TOU Components, Degrees>", 
+                                            CDH['break'], 
+                                            " as Coefficients w/ All 2-Way Interactions")))
