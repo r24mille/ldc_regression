@@ -1,11 +1,12 @@
 library(stargazer) # LaTeX tables
 library(segmented) # Find linear regression breakpoint
 library(BMA) # Compare GLM models
+library(sme) # For AICc function
 
 # Source the function in another file
-source('reg_subset_visualization.R')
 source('cdh_lag_methods.R')
 source('tou_time_methods.R')
+source('goodness_fit_visualization.R')
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -54,12 +55,27 @@ readings.aggregate$price <- factor(readings.aggregate$price,
                                    c("off_peak", "mid_peak", "on_peak"))
 
 ##
+# Weight terms based on the number of readings involved in the aggregate average
+# TODO(r24mille): Resid. Dev is lower with weights. Justify this choice.
+maxagg <- max(readings.aggregate$agg_count)
+wghts <- readings.aggregate$agg_count/maxagg
+
+##
 # Use 'segmented' package rather than my prior home-grown method of finding 
 # the optimal cooling degree hour breakpoint (though they give the same 
 # result).
+#
+# TODO(r24mille): segmented chooses very different cdhbreak numbers based on 
+#                 the model chosen:
+#                      lm(...) is 18
+#                      glm(...) is 18
+#                      glm(..., family=Gamma) is 13
+#                      glm(...,family=Gamma(link="log")) is 16
+#                 Maybe just making an empirical choice for CDH break within 
+#                 the context of the final model is the best choice.
 model.readings.glm.presegment <- glm(kwh ~ temperature*tou_period*billing_active,
                                    data = readings.aggregate,
-                                   family = Gamma)
+                                   family = Gamma(link="log"))
 seg <- segmented(obj = model.readings.glm.presegment, 
                  seg.Z = ~temperature,
                  psi = list(temperature = c(18)))
@@ -72,12 +88,13 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 # Find the optimal number of hours lag, and the best method for incorporating 
 # CDH. Is it best to sum up current and past hours, similar to traditional CDH 
 # or should previous hours be nested under the current hour?
-nlags <- 4
+nlags <- 26
 cdhlagmat.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
-                                          ncol = 2,
+                                          ncol = 3,
                                           dimnames = list(c(0:nlags),
                                                           c("ResidualDeviance", 
-                                                            "AIC")))
+                                                            "AICc",
+                                                            "BIC")))
 for(i in 0:nlags) {
   # Matrix of CDH lags, TOU as periods
   cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
@@ -85,13 +102,13 @@ for(i in 0:nlags) {
                                         cdhlagmat)
   cdhlagmat.touperiods <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
   cdhlagmat.touperiods.maxfmla <- CdhLagMaximalFormula()
-  # maxagg <- max(readings.aggregate.cdhlagmat$agg_count)
-  # wghts <- readings.aggregate.cdhlagmat$agg_count/maxagg
   cdhlagmat.touperiods.maxglm <- glm(formula = cdhlagmat.touperiods.maxfmla, 
                                           data = cdhlagmat.touperiods,
-                                          # weights = wghts, 
-                                          family = Gamma)
+                                          weights = wghts, 
+                                          family = Gamma(link="log")) 
+  # TODO(r24mille): Resid. Dev is lower with link="log". Justify this choice.
   
   cdhlagmat.touperiods.maxglm.pwr[(i+1), 1] <- cdhlagmat.touperiods.maxglm$deviance
-  cdhlagmat.touperiods.maxglm.pwr[(i+1), 2] <- cdhlagmat.touperiods.maxglm$aic
+  cdhlagmat.touperiods.maxglm.pwr[(i+1), 2] <- AICc(cdhlagmat.touperiods.maxglm)
+  cdhlagmat.touperiods.maxglm.pwr[(i+1), 3] <- BIC(cdhlagmat.touperiods.maxglm)
 }
