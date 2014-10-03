@@ -10,10 +10,11 @@ readings.aggregate <- read.csv(fpath)
 
 # Provide a Q-Q Plot to do a visual check against normal distribution. CAR package has a lot of 
 # convenient defaults (eg. confidence intervals)
+par(mfrow=c(1,2))
 qqPlot(x = readings.aggregate$kwh,
        distribution = "norm",
        mean = mean(readings.aggregate$kwh),
-       main = paste0("Q-Q Plot of Normal Distribution vs. Observed Readings (kWh)"),
+       main = paste0("Q-Q Plot of Normal Dist. vs. Readings (kWh)"),
        xlab = paste0("Normal Distribution (Mean=",
                      round(mean(readings.aggregate$kwh), 1),
                      ", SD=",
@@ -32,7 +33,7 @@ qqPlot(x = readings.aggregate$kwh,
        distribution = "gamma",
        shape = gfitshape,
        rate = gfitrate,
-       main = paste0("Q-Q Plot of Gamma Distribution vs. Observed Readings (kWh)"),
+       main = paste0("Q-Q Plot of Gamma Dist. vs. Readings (kWh)"),
        xlab = paste0("Gamma Distribution (shape=",
                      round(gfitshape, 1),
                      ", rate=",
@@ -53,6 +54,7 @@ grand <- rgamma(n = length(readings.aggregate$kwh),
                 rate = gfitrate)
 
 # Plot the probability density function of the real and Normal distribution
+par(mfrow=c(1,1))
 kdbw = 0.25
 plot(density(readings.aggregate$kwh, bw = kdbw), 
      xlim = c(0,5), 
