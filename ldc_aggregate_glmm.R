@@ -109,7 +109,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                     easier interpretation of the expected value since it does 
 #                     not need to be back transformed
 # TODO(r24mille): This whole section could be two nicely built functions
-nlags <- 12
+nlags <- 30
 
 # 1. Summed CDH lags, TOU as periods
 cdhlagsum.touperiods.maxglm.pwr <- matrix(nrow = (nlags + 1),
@@ -247,7 +247,7 @@ for(i in 0:nlags) {
   cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
   readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
                                         cdhlagmat)
-  cdhlagmat.toucomps <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.toucomps <- TrimColsTouTimeComponents(readings.aggregate.cdhlagmat)
   cdhlagmat.toucomps.nestedfmla <- CdhLagMaximalNestedFormula(cdhlagmat.toucomps,
                                                            colnames(cdhlagmat))
   cdhlagmat.toucomps.nestedglm <- glm(formula = cdhlagmat.toucomps.nestedfmla, 
@@ -279,7 +279,7 @@ for(i in 0:nlags) {
   cdhlagmat <- CreateCdhLagMatrix(i, readings.aggregate)
   readings.aggregate.cdhlagmat <- cbind(readings.aggregate, 
                                         cdhlagmat)
-  cdhlagmat.toucomps <- TrimColsTouPeriods(readings.aggregate.cdhlagmat)
+  cdhlagmat.toucomps <- TrimColsTouTimeComponents(readings.aggregate.cdhlagmat)
   cdhlagmat.toucomps.maxfmla <- CdhLagMaximalFormula()
   cdhlagmat.toucomps.maxglm <- glm(formula = cdhlagmat.toucomps.maxfmla, 
                                      data = cdhlagmat.toucomps,
