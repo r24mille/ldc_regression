@@ -229,6 +229,108 @@ IterativeGlmPlot <- function(iter.glm.pwr, maintitle) {
                      title = maintitle)
 }
 
+PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
+  # Steps through 0-nhrs iterations of GLMs trying varioud combinations of 
+  # structuring TOU and CDH explanatory variables. The explanatory power of each
+  # model is plotted.
+  #
+  # Args:
+  #   df.readings: A readings dataframe to be passed as the "data" parameter 
+  #                to the GLMs.
+  #   weights: Weights to be passed to the GLMs
+  #   nhrs: Number of hours to include in the CDH component of the model
+  cdhlagsum.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhlagmat.touperiods.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhlagmat.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhlagsum.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhlagmat.toucomps.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhlagmat.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  for(i in 0:nhrs) {
+    # 1. Summed CDH lags, TOU as periods
+    cdhlagsum.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                     wghts = weights, 
+                                                     nlags = i, 
+                                                     is.touperiod = TRUE, 
+                                                     is.cdhlagsum = TRUE, 
+                                                     is.maxformula = TRUE)
+    cdhlagsum.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagsum.touperiods.maxglm)
+    
+    # 2. Matrix of CDH lags as nested interactions, TOU as periods
+    cdhlagmat.touperiods.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                        wghts = weights, 
+                                                        nlags = i, 
+                                                        is.touperiod = TRUE, 
+                                                        is.cdhlagsum = FALSE, 
+                                                        is.maxformula = FALSE)
+    cdhlagmat.touperiods.nestedglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.touperiods.nestedglm)
+    
+    # 3. Matrix of CDH lags as two-way interactions, TOU as periods
+    cdhlagmat.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                     wghts = weights, 
+                                                     nlags = i, 
+                                                     is.touperiod = TRUE, 
+                                                     is.cdhlagsum = FALSE, 
+                                                     is.maxformula = TRUE)
+    cdhlagmat.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.touperiods.maxglm)
+    
+    # 4. Summed CDH lags, TOU components of time
+    cdhlagsum.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                   wghts = weights, 
+                                                   nlags = i, 
+                                                   is.touperiod = FALSE, 
+                                                   is.cdhlagsum = TRUE, 
+                                                   is.maxformula = TRUE)
+    cdhlagsum.toucomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagsum.toucomps.maxglm)
+    
+    # 5. Matrix of CDH lags as nested interactions, TOU components of time
+    cdhlagmat.toucomps.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                      wghts = weights, 
+                                                      nlags = i, 
+                                                      is.touperiod = FALSE, 
+                                                      is.cdhlagsum = FALSE, 
+                                                      is.maxformula = FALSE)
+    cdhlagmat.toucomps.nestedglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.toucomps.nestedglm)
+    
+    # 6. Matrix of CDH lags as two-way interactions, TOU components of time
+    cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                   wghts = weights, 
+                                                   nlags = i, 
+                                                   is.touperiod = FALSE, 
+                                                   is.cdhlagsum = FALSE, 
+                                                   is.maxformula = TRUE)
+    cdhlagmat.toucomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.toucomps.maxglm)
+  }
+  IterativeGlmPlot(iter.glm.pwr = cdhlagsum.touperiods.maxglm.pwr, 
+                   maintitle = expression(paste("TOU Period, Degrees>", 
+                                                CDH['break'], 
+                                                " Summed")))
+  
+  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.touperiods.nestedglm.pwr, 
+                   maintitle = expression(paste("TOU Period, Degrees>", 
+                                                CDH['break'], 
+                                                " as Coefficients w/ Nested Interaction")))
+  
+  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.touperiods.maxglm.pwr, 
+                   maintitle = expression(paste("TOU Period, Degrees>", 
+                                                CDH['break'], 
+                                                " as Coefficients w/ All 2-Way Interactions")))
+  
+  IterativeGlmPlot(iter.glm.pwr = cdhlagsum.toucomps.maxglm.pwr, 
+                   maintitle = expression(paste("TOU Components, Degrees>", 
+                                                CDH['break'], 
+                                                " Summed")))
+  
+  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.toucomps.nestedglm.pwr, 
+                   maintitle = expression(paste("TOU Components, Degrees>", 
+                                                CDH['break'], 
+                                                " as Coefficients w/ Nested Interaction")))
+  
+  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.toucomps.maxglm.pwr, 
+                   maintitle = expression(paste("TOU Components, Degrees>", 
+                                                CDH['break'], 
+                                                " as Coefficients w/ All 2-Way Interactions")))
+}
+
 TrimColsTouPeriods <- function(readingsdf) {
   # Trim the columns down from full readings.aggregate to only those needed 
   # when working with "TOU Period" version of the model.
