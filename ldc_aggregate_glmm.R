@@ -1,7 +1,8 @@
 library(stargazer) # LaTeX tables
 library(segmented) # Find linear regression breakpoint
-library(BMA) # Compare GLM models
 library(sme) # For AICc function
+library(pscl) # For pseudo R-squared values
+library(BMA) # Compare GLM models
 
 # Source the function in another file
 source('glm_method_iteration.R')
@@ -126,3 +127,6 @@ cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = readings.aggregate,
                                                is.touperiod = FALSE, 
                                                is.cdhlagsum = FALSE, 
                                                is.maxformula = TRUE)
+df.trimmed <- cdhlagmat.toucomps.maxglm$model
+wghts <- weights
+pR2(cdhlagmat.toucomps.maxglm) # These are supposed to be on the range 0-1?
