@@ -1,12 +1,10 @@
 library(stargazer) # LaTeX tables
 library(segmented) # Find linear regression breakpoint
 library(sme) # For AICc function
-library(pscl) # For pseudo R-squared values
 library(BMA) # Compare GLM models
 
 # Source the function in another file
 source('glm_method_iteration.R')
-source('goodness_fit_visualization.R')
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -115,9 +113,9 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                     because my variance is not a simple Gamma distribution.
 
 # Commenting out the iterative comparison, now that I have the results from it.
-#PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-#                           nhrs = 3,
-#                           weights = weights)
+PerformTouCdhGlmIterations(df.readings = readings.aggregate,
+                          nhrs = 2,
+                          weights = weights)
 
 # TOU components and each CDH lag as its own coefficient turns out to have the 
 # highest predictive power with 8 hours of history.
@@ -127,6 +125,3 @@ cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = readings.aggregate,
                                                is.touperiod = FALSE, 
                                                is.cdhlagsum = FALSE, 
                                                is.maxformula = TRUE)
-df.trimmed <- cdhlagmat.toucomps.maxglm$model
-wghts <- weights
-pR2(cdhlagmat.toucomps.maxglm) # These are supposed to be on the range 0-1?

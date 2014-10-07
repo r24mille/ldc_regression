@@ -1,3 +1,6 @@
+source('goodness_fit_visualization.R')
+source('pseudo_rsquared.R')
+
 CdhLagMaximalFormula <- function(df.trimmed) {
   # This function returns the forumla for all main effects and two-way 
   # interactions of the columns in the trimmed dataframe provided.
@@ -121,14 +124,15 @@ GlmPowerResultsMatrix <- function(nlags) {
   #          matrix big enough to store results from 0-nlags.
   #
   # Returns:
-  #   A [3 x (nlags+1)] array that stores residual deviance, AICc, and BIC values. 
-  #   Each column is a metric. Each row is an iteration.
+  #   A [(nlags+1) x 4] array that stores residual deviance, AICc, BIC, and 
+  #   pseudo R^2 values. Each column is a metric. Each row is an iteration.
   resmatrix <- matrix(nrow = (nlags + 1),
-                      ncol = 3,
+                      ncol = 4,
                       dimnames = list(c(0:nlags),
                                       c("ResidualDeviance", 
                                         "AICc",
-                                        "BIC")))
+                                        "BIC",
+                                        "McFaddenPseudoR2")))
   return(resmatrix)
 }
 
@@ -203,28 +207,65 @@ IterativeGlmPower <- function(iter.glm) {
   #   iter.glm: A GLM object for one iteration.
   #
   # Returns:
-  #   A 1x3 matrix representing a row of explanatory power information for the 
+  #   A 1x4 matrix representing a row of explanatory power information for the 
   #   provided model including residual deviance, AICc, and BIC.
-  pwr.row <- matrix(nrow = 1, ncol = 3)
+  pwr.row <- matrix(nrow = 1, ncol = 4)
   pwr.row[1, 1] <- iter.glm$deviance
   pwr.row[1, 2] <- AICc(iter.glm)
   pwr.row[1, 3] <- BIC(iter.glm)
+  pwr.row[1, 4] <- McFaddenPseudoR2(iter.glm)
   return(pwr.row)
 }
 
-IterativeGlmPlot <- function(iter.glm.pwr, maintitle) {
+IterativeGlmPlots <- function(iter.glm.pwr, maintitle) {
+  # Plot both the residual deviation and pseudo r-squared versions against two 
+  # information criteria to convey the explanatory power of each GLM model 
+  # iteration.
+  #
+  # Args:
+  #   iter.glm.pwr: An [n x 4] matrix created by the GlmPowerResultsMatrix 
+  #                 function.
+  #   maintitle: The "main" title passed along to the plot(...) function.
+  IterativeGlmPlotWithResidualDevation(iter.glm.pwr, maintitle)
+  IterativeGlmPlotWithPseudoRsquared(iter.glm.pwr, maintitle)
+}
+
+IterativeGlmPlotWithPseudoRsquared <- function(iter.glm.pwr, maintitle) {
   # Wraps the PlotGlmFitMeasures function since each iteration calls it in 
   # pretty much the same way. Encapsulating this call simplifies setting 
   # the many parameters required by the function.
   #
+  # The y2-axis is McFadden pseudo r-squared values.
+  #
   # Args:
-  #   iter.glm.pwr: An [n x 3] matrix created by the GlmPowerResultsMatrix 
+  #   iter.glm.pwr: An [n x 4] matrix created by the GlmPowerResultsMatrix 
   #                 function.
   #   maintitle: The "main" title passed along to the plot(...) function.
   PlotGlmFitMeasures(aiccs = iter.glm.pwr[, 2], 
                      bics = iter.glm.pwr[, 3], 
-                     resdevs = iter.glm.pwr[, 1], 
+                     y2vals = iter.glm.pwr[, 4], 
                      xvals = c(0:(nrow(iter.glm.pwr) - 1)), 
+                     y2title = expression(paste("McFadden Pseudo ", R^2)), 
+                     xtitle = "Number of Past Hours Included", 
+                     title = maintitle)
+}
+
+IterativeGlmPlotWithResidualDevation <- function(iter.glm.pwr, maintitle) {
+  # Wraps the PlotGlmFitMeasures function since each iteration calls it in 
+  # pretty much the same way. Encapsulating this call simplifies setting 
+  # the many parameters required by the function.
+  #
+  # The y-axis is residual deviation values.
+  #
+  # Args:
+  #   iter.glm.pwr: An [n x 4] matrix created by the GlmPowerResultsMatrix 
+  #                 function.
+  #   maintitle: The "main" title passed along to the plot(...) function.
+  PlotGlmFitMeasures(aiccs = iter.glm.pwr[, 2], 
+                     bics = iter.glm.pwr[, 3], 
+                     y2vals = iter.glm.pwr[, 1], 
+                     xvals = c(0:(nrow(iter.glm.pwr) - 1)), 
+                     y2title = "Residual Deviation", 
                      xtitle = "Number of Past Hours Included", 
                      title = maintitle)
 }
@@ -245,6 +286,7 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
   cdhlagsum.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
   cdhlagmat.toucomps.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
   cdhlagmat.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  
   for(i in 0:nhrs) {
     # 1. Summed CDH lags, TOU as periods
     cdhlagsum.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
@@ -300,35 +342,36 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
                                                    is.maxformula = TRUE)
     cdhlagmat.toucomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.toucomps.maxglm)
   }
-  IterativeGlmPlot(iter.glm.pwr = cdhlagsum.touperiods.maxglm.pwr, 
-                   maintitle = expression(paste("TOU Period, Degrees>", 
-                                                CDH['break'], 
-                                                " Summed")))
   
-  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.touperiods.nestedglm.pwr, 
-                   maintitle = expression(paste("TOU Period, Degrees>", 
-                                                CDH['break'], 
-                                                " as Coefficients w/ Nested Interaction")))
+  IterativeGlmPlots(iter.glm.pwr = cdhlagsum.touperiods.maxglm.pwr, 
+                    maintitle = expression(paste("TOU Period, Degrees>", 
+                                                 CDH['break'], 
+                                                 " Summed")))
   
-  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.touperiods.maxglm.pwr, 
-                   maintitle = expression(paste("TOU Period, Degrees>", 
-                                                CDH['break'], 
-                                                " as Coefficients w/ All 2-Way Interactions")))
+  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.touperiods.nestedglm.pwr, 
+                    maintitle = expression(paste("TOU Period, Degrees>", 
+                                                 CDH['break'], 
+                                                 " as Coefficients w/ Nested Interaction")))
   
-  IterativeGlmPlot(iter.glm.pwr = cdhlagsum.toucomps.maxglm.pwr, 
-                   maintitle = expression(paste("TOU Components, Degrees>", 
-                                                CDH['break'], 
-                                                " Summed")))
+  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.touperiods.maxglm.pwr, 
+                    maintitle = expression(paste("TOU Period, Degrees>", 
+                                                 CDH['break'], 
+                                                 " as Coefficients w/ All 2-Way Interactions")))
   
-  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.toucomps.nestedglm.pwr, 
-                   maintitle = expression(paste("TOU Components, Degrees>", 
-                                                CDH['break'], 
-                                                " as Coefficients w/ Nested Interaction")))
+  IterativeGlmPlots(iter.glm.pwr = cdhlagsum.toucomps.maxglm.pwr, 
+                    maintitle = expression(paste("TOU Components, Degrees>", 
+                                                 CDH['break'], 
+                                                 " Summed")))
   
-  IterativeGlmPlot(iter.glm.pwr = cdhlagmat.toucomps.maxglm.pwr, 
-                   maintitle = expression(paste("TOU Components, Degrees>", 
-                                                CDH['break'], 
-                                                " as Coefficients w/ All 2-Way Interactions")))
+  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.toucomps.nestedglm.pwr, 
+                    maintitle = expression(paste("TOU Components, Degrees>", 
+                                                 CDH['break'], 
+                                                 " as Coefficients w/ Nested Interaction")))
+  
+  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.toucomps.maxglm.pwr, 
+                    maintitle = expression(paste("TOU Components, Degrees>", 
+                                                 CDH['break'], 
+                                                 " as Coefficients w/ All 2-Way Interactions")))
 }
 
 TrimColsTouPeriods <- function(readingsdf) {

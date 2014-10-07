@@ -115,7 +115,8 @@ PlotRegSubSets <- function (bics, adjr2s, title) {
        col = "black") 
 }
 
-PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
+PlotGlmFitMeasures <- function (aiccs, bics, y2vals, xvals, 
+                                y2title, xtitle, title) {
   # Plots several measures of model fit on a dual y-axis plot. It shows how 
   # information criteria (IC) and residual deviance change as parameters 
   # within the model change iteratively.
@@ -123,10 +124,12 @@ PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
   # Args:
   #   aiccs: A vector of AICc values to be plotted
   #   bics: A vector of BIC values to be plotted
-  #   resdevs: A vector of residual deviates to be plotted
+  #   y2vals: A vector of values to be plotted on the y2-axis (eg. residual 
+  #           deviations or pseudo R^2.
   #   xvals: The values to be plotted along the x-axis. In the context of this 
   #          function they generally represent iterative changes to a model 
   #          parameter.
+  #   y2title: The title of the y2-axis
   #   xtitle: The title of the x-axis
   #   title: The main title of the plot
   
@@ -135,12 +138,12 @@ PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
   xrng = c(min(xvals), max(xvals))
   y1rng = c(min(c(bics, aiccs)),
             max(c(bics, aiccs)))
-  y2rng = c(min(resdevs), max(resdevs))
+  y2rng = c(min(y2vals), max(y2vals))
   
   # Colors, helped by http://colorbrewer2.org/
   colaicc = "#4daf4a" # greenish
   colbic = "#377eb8" # blueish
-  colresdev = "#e41a1c" # reddish
+  coly2 = "#e41a1c" # reddish
   
   # y1, plot AICc values
   plot(x = xvals,
@@ -151,29 +154,31 @@ PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
        xlim = xrng, 
        ylab = "Information Criteria (AICc and BIC)", 
        ylim = y1rng, 
-       main = title)
+       main = title,
+       lwd = 2) # line width
   
   # y1, plot BIC values
   lines(x = xvals,
         y = bics,
-        col = colbic)
+        col = colbic,
+        lwd = 2) # line width
   
   # 2nd plot over the existing plot
   par(new=TRUE)
   
-  # y2, plot the residual deviances
   plot(x = xvals,
-       y = resdevs, 
+       y = y2vals, 
        type = "l", 
-       col = colresdev, 
+       col = coly2, 
        xaxt = "n", 
        xlab = "", 
        xlim = xrng, 
        yaxt = "n", 
        ylab = "", 
-       ylim = y2rng)
+       ylim = y2rng,
+       lwd = 2) # line width
   axis(4)
-  mtext("Residual Deviance",
+  mtext(y2title,
         side = 4, 
         line = 3)
   
@@ -224,8 +229,8 @@ PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
   # 5th plot over the existing plot
   par(new=TRUE)
   
-  # Create a point and label Res. Deviance occurring at lowest BIC
-  resdev.atbic <- round(resdevs[minbic.index], 
+  # Create a point and label the y2 value coinciding with the lowest BIC
+  y2.atbic <- round(y2vals[minbic.index], 
                        digits = 1)
   plot(x = xvals[minbic.index],
        xaxt = "n", 
@@ -233,23 +238,24 @@ PlotGlmFitMeasures <- function (aiccs, bics, resdevs, xvals, xtitle, title) {
        xlim = xrng, 
        yaxt = "n", 
        ylab = "", 
-       y = resdev.atbic, 
+       y = y2.atbic, 
        ylim = y2rng, 
        type = "p", 
        pch = 20, # dot
-       col = colresdev)
+       col = coly2)
   text(x = xvals[minbic.index], 
        xlim = xrng,
-       y = resdev.atbic, 
+       y = y2.atbic, 
        ylim = y2rng, 
-       labels = c(resdev.atbic), 
+       labels = c(y2.atbic), 
        pos = 3, # above
        col = "black") 
   
   legend("topright", 
-         col = c(colaicc, colbic, colresdev), 
+         col = c(colaicc, colbic, coly2), 
          lty = 1, 
-         legend = c("Corrected Akaike's Information Criterion (AICc)",
-                    "Bayesian Information Criterion (BIC)",
-                    "Residual Deviance"))
+         lwd = 2, # line width
+         legend = c("AICc",
+                    "BIC",
+                    y2title))
 }
