@@ -114,7 +114,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 # Commenting out the iterative comparison, now that I have the results from it.
 PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-                          nhrs = 2,
+                          nhrs = 26,
                           weights = weights)
 
 # TOU components and each CDH lag as its own coefficient turns out to have the 

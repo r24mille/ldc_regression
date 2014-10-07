@@ -230,15 +230,14 @@ PlotGlmFitMeasures <- function (aiccs, bics, y2vals, xvals,
   par(new=TRUE)
   
   # Create a point and label the y2 value coinciding with the lowest BIC
-  y2.atbic <- round(y2vals[minbic.index], 
-                       digits = 1)
+  y2.atbic <- y2vals[minbic.index]
   plot(x = xvals[minbic.index],
        xaxt = "n", 
        xlab = "", 
        xlim = xrng, 
        yaxt = "n", 
        ylab = "", 
-       y = y2.atbic, 
+       y = y2.atbic,
        ylim = y2rng, 
        type = "p", 
        pch = 20, # dot
@@ -247,7 +246,7 @@ PlotGlmFitMeasures <- function (aiccs, bics, y2vals, xvals,
        xlim = xrng,
        y = y2.atbic, 
        ylim = y2rng, 
-       labels = c(y2.atbic), 
+       labels = c(round(y2.atbic, digits = 3)), 
        pos = 3, # above
        col = "black") 
   
