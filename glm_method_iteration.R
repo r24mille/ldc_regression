@@ -113,6 +113,56 @@ CreateCdhLagMatrix <- function(nlags, readingsdf) {
   return(cdhlags)
 }
 
+MaximumTractableInteractionsGlmModel <- function(df.readings, nlags, wghts) {
+  # Certain two-way interactions can never interract all levels of each 
+  # categorical explanatory variable (eg. weekend="Yes":price="on_peak"). So, 
+  # the interacted term must be broken into its own column and then the 
+  # formula updated to reflect the fact that
+  #
+  # Args:
+  #   df.trimmed: A trimmed version of the readings.aggregate dataframe with 
+  #               weights as a column.
+  #
+  # Returns:
+  #   A formula object, where each independent variable is modeled as a fixed 
+  #   effect with main effects and two-way interactions. This function 
+  #   knows not to put the response variable or weights into the formula.
+  cdhlag <- CreateCdhLagMatrix(nlags, df.readings)
+  readings.with.cdh <- cbind(df.readings, cdhlag, wghts)
+  df.trimmed <- TrimColsTouTimeComponents(readings.with.cdh)
+  
+  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh",
+                                                                  "weights",
+                                                                  "wghts")])
+  explvars.fmlastr <- paste(explvars, collapse = " + ")
+  maximal.fmlastr <- paste0("kwh ~ (", explvars.fmlastr, ")^2")
+  tractable.fmlastr <- maximal.fmlastr
+  
+  # Create a column that represents only the feasible interactions of hrstr and
+  # price columns. Then remove the hrstr:price interaction from the formula
+  # string.
+  df.trimmed$hrstr_price <- paste0(df.trimmed$hrstr, df.trimmed$price)
+  tractable.fmlastr <- paste(tractable.fmlastr, 
+                             "- hrstr:price", 
+                             "+ hrstr_price")
+  
+  # Create a column that represents only the feasible interaction of weekend and 
+  # price columns. Then remove the weekend:price interaction from the formula 
+  # string.
+  df.trimmed$wknd_price <- paste0(df.trimmed$weekend, df.trimmed$price)
+  tractable.fmlastr <- paste(tractable.fmlastr, 
+                             "- weekend:price", 
+                             "+ wknd_price")
+
+  
+  # Fit the GLM model
+  tractable.glm <- glm(formula = formula(tractable.fmlastr), 
+                  data = df.trimmed, 
+                  weights = wghts, 
+                  family = Gamma(link="log"))
+  return(tractable.glm)
+}
+
 GlmPowerResultsMatrix <- function(nlags) {
   # Function to standardize the creation of a matrix that stores model 
   # descriptive power results from multiple iterations of glm fitting.

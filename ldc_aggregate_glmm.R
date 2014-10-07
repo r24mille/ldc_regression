@@ -113,15 +113,37 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                     because my variance is not a simple Gamma distribution.
 
 # Commenting out the iterative comparison, now that I have the results from it.
-PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-                          nhrs = 26,
-                          weights = weights)
+#PerformTouCdhGlmIterations(df.readings = readings.aggregate,
+#                          nhrs = 26,
+#                          weights = weights)
 
 # TOU components and each CDH lag as its own coefficient turns out to have the 
 # highest predictive power with 8 hours of history.
-cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = readings.aggregate, 
-                                               wghts = weights, 
-                                               nlags = 8, 
-                                               is.touperiod = FALSE, 
-                                               is.cdhlagsum = FALSE, 
-                                               is.maxformula = TRUE)
+# cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = readings.aggregate, 
+#                                                wghts = weights, 
+#                                                nlags = 8, 
+#                                                is.touperiod = FALSE, 
+#                                                is.cdhlagsum = FALSE, 
+#                                                is.maxformula = TRUE)
+
+maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
+                                                         nlags = 2,
+                                                         wghts = weights) 
+
+##
+# STEP Work-in-Progress
+# Use step(...) to optimally eliminate explanatory variables
+allvars <- colnames(maxtractable.glm$model) 
+eplxvars <- allvars[which(allvars != "kwh")]
+drop1glm <- drop1(object = maxtractable.glm,
+                test = "LRT", 
+                k = log(nrow(maxtractable.glm$model)),
+                trace = TRUE)
+# Sort drop1glm according to Pr(>Chi) descending
+drop1glm[ order(drop1glm[,5], decreasing = TRUE), ]
+# All the main effects and interaction terms used in the original model
+attr(cdhlagmat.toucomps.maxglm$terms, "term.labels")
+
+##
+# BIC.GLM leap variant work-in-progress
+# bic.glm(...) isn't working due to singularity issues, I believe.
