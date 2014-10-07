@@ -36,13 +36,11 @@ CdhLagMaximalNestedFormula <- function(df.trimmed, cdhlagmat.colnames) {
   #   A formula object, where the lagged obervation terms are nested, and 
   #   two-way interracted with other main effects. This function knows not to
   #   put the response variable or weights into the formula.
-  
-  # TODO(r24mille): Optimize this so that an entire subset isn't created just 
-  #                 to get me.colnames.
-  noncdh.colnames <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c(cdhlagmat.colnames, 
-                                                                         "kwh",
-                                                                         "weights",
-                                                                         "wghts")]) 
+  allcolnames <- colnames(df.trimmed)
+  noncdh.colnames <- allcolnames[! allcolnames %in% c(cdhlagmat.colnames, 
+                                               "kwh",
+                                               "weights",
+                                               "wghts")]
   noncdh.fmlastr <- paste(noncdh.colnames,
                           collapse = " + ")
   nestedcdhlag.fmlastr <- paste(cdhlagmat.colnames,
@@ -226,7 +224,7 @@ IterativeGlmPlots <- function(iter.glm.pwr, maintitle) {
   #   iter.glm.pwr: An [n x 4] matrix created by the GlmPowerResultsMatrix 
   #                 function.
   #   maintitle: The "main" title passed along to the plot(...) function.
-  IterativeGlmPlotWithResidualDevation(iter.glm.pwr, maintitle)
+  IterativeGlmPlotWithResidualDeviance(iter.glm.pwr, maintitle)
   IterativeGlmPlotWithPseudoRsquared(iter.glm.pwr, maintitle)
 }
 
@@ -250,12 +248,12 @@ IterativeGlmPlotWithPseudoRsquared <- function(iter.glm.pwr, maintitle) {
                      title = maintitle)
 }
 
-IterativeGlmPlotWithResidualDevation <- function(iter.glm.pwr, maintitle) {
+IterativeGlmPlotWithResidualDeviance <- function(iter.glm.pwr, maintitle) {
   # Wraps the PlotGlmFitMeasures function since each iteration calls it in 
   # pretty much the same way. Encapsulating this call simplifies setting 
   # the many parameters required by the function.
   #
-  # The y-axis is residual deviation values.
+  # The y-axis is residual deviance values.
   #
   # Args:
   #   iter.glm.pwr: An [n x 4] matrix created by the GlmPowerResultsMatrix 
@@ -265,7 +263,7 @@ IterativeGlmPlotWithResidualDevation <- function(iter.glm.pwr, maintitle) {
                      bics = iter.glm.pwr[, 3], 
                      y2vals = iter.glm.pwr[, 1], 
                      xvals = c(0:(nrow(iter.glm.pwr) - 1)), 
-                     y2title = "Residual Deviation", 
+                     y2title = "Residual Deviance", 
                      xtitle = "Number of Past Hours Included", 
                      title = maintitle)
 }
