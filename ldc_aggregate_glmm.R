@@ -128,7 +128,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 ##
 # STEP Work-in-Progress
-nlags = 2
+nlags = 0
 
 # Set up 3D results dataframe
 df.stepresults <- data.frame(num.cdhlags = numeric(),
@@ -154,7 +154,7 @@ for(i in 0:nlags) {
   maxtractable.glm.pwr <- IterativeGlmPower(maxtractable.glm)
   explvars <- attr(maxtractable.glm$terms, "term.labels")
   df.stepresults <- rbind(df.stepresults,
-                          data.frame(num.cdhlags = nlags,
+                          data.frame(num.cdhlags = i,
                                      num.explvars = length(explvars),
                                      deviance.null = maxtractable.glm$null.deviance,
                                      deviance.residuals = maxtractable.glm$deviance,
@@ -196,7 +196,7 @@ for(i in 0:nlags) {
       maxtractable.glm.pwr <- IterativeGlmPower(maxtractable.glm)
       explvars <- attr(maxtractable.glm$terms, "term.labels")
       df.stepresults <- rbind(df.stepresults,
-                              data.frame(num.cdhlags = nlags,
+                              data.frame(num.cdhlags = i,
                                          num.explvars = length(explvars),
                                          deviance.null = maxtractable.glm$null.deviance,
                                          deviance.residuals = maxtractable.glm$deviance,
@@ -217,6 +217,24 @@ for(i in 0:nlags) {
     }
   }
 }
+
+
+
+##
+# 3D Plot goodness-of-fit
+
+# The y-intercept is not interesting, the same for every model, and makes 
+# the plot difficult to look at.
+df.stepresults.trimmed <- subset(df.stepresults, num.explvars > 0)
+wireframe(BIC ~ num.explvars * num.cdhlags, 
+          data = df.stepresults.trimmed,
+          xlab = "Number of Explanatory Variables", 
+          ylab = "Number of Past Hours Included",
+          zlab = "McFadden Pseudo R-squared", 
+          main = "Stepwise Removal of Terms from Maximal Model",
+          drape = TRUE,
+          colorkey = TRUE,
+          screen = list(z = -60, x = -60))
 
 ##
 # BIC.GLM leap variant work-in-progress
