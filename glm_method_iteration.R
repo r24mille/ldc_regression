@@ -149,10 +149,14 @@ MaximumTractableInteractionsGlmModel <- function(df.readings, nlags, wghts) {
   # Create a column that represents only the feasible interaction of weekend and 
   # price columns. Then remove the weekend:price interaction from the formula 
   # string.
-  df.trimmed$wknd_price <- paste0(df.trimmed$weekend, df.trimmed$price)
+  # 
+  # TODO(r24mille): Based on model simplification, weekend:price never becomes
+  #                 linearly seprable from the main effects of price.
+  #                   * Read on linear separability and what can lead to 
+  #                     singularities in GLM model fitting.
+  #df.trimmed$wknd_price <- paste0(df.trimmed$weekend, df.trimmed$price)
   tractable.fmlastr <- paste(tractable.fmlastr, 
-                             "- weekend:price", 
-                             "+ wknd_price")
+                             "- weekend:price")
 
   
   # Fit the GLM model
