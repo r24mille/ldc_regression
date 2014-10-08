@@ -128,7 +128,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 ##
 # STEP Work-in-Progress
-nlags = 0
+nlags = 2
 
 # Set up 3D results dataframe
 df.stepresults <- data.frame(num.cdhlags = numeric(),
@@ -148,6 +148,7 @@ for(i in 0:nlags) {
                                                            wghts = weights)
   # Copy trimmed dataframe created within function for use later
   df.trimmed <- maxtractable.glm$model
+  num.observations <- nrow(df.trimmed)
   
   # I know... iteratively building a data.frame is bad
   maxtractable.glm.pwr <- IterativeGlmPower(maxtractable.glm)
@@ -173,14 +174,17 @@ for(i in 0:nlags) {
   while (is.stepwise.nlags.complete == FALSE) {
     drop1.results <- drop1(object = maxtractable.glm,
                            test = "LRT", 
-                           k = log(nrow(maxtractable.glm$model)))
+                           k = log(num.observations))
     # Sort drop1.results according to Pr(>Chi) descending, grab least
     # significant term and assign to a variable.
     explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,5], 
                                                   decreasing = TRUE), ][1,])
     
     # If stepwise has reached the y-intercept, then no more model reduction can 
-    # be done. Stop and iterate to the next cdhlag.
+    # be done (linear seperability issue). Stop and iterate to the next cdhlag.
+    #
+    # TODO(r24mille): Can this be corrected in the MaximumTractableInteractionsGlmModel(...)
+    #                 function?
     if (explvar.leastsig == "<none>") {
       is.stepwise.nlags.complete = TRUE
     } else {
@@ -205,7 +209,11 @@ for(i in 0:nlags) {
                                          variable.removed = explvar.leastsig))
       
       # Print status update
-      print(explvars)
+      if (length(explvars) == 0) {
+        is.stepwise.nlags.complete = TRUE
+      } else {
+        print(explvars)
+      }
     }
   }
 }
