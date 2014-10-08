@@ -113,8 +113,8 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                     because my variance is not a simple Gamma distribution.
 
 # Commenting out the iterative comparison, now that I have the results from it.
-#PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-#                          nhrs = 26,
+# PerformTouCdhGlmIterations(df.readings = readings.aggregate,
+#                          nhrs = 5,
 #                          weights = weights)
 
 # TOU components and each CDH lag as its own coefficient turns out to have the 
@@ -126,23 +126,89 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                                                is.cdhlagsum = FALSE, 
 #                                                is.maxformula = TRUE)
 
-maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
-                                                         nlags = 2,
-                                                         wghts = weights) 
-
 ##
 # STEP Work-in-Progress
-# Use step(...) to optimally eliminate explanatory variables
-allvars <- colnames(maxtractable.glm$model) 
-eplxvars <- allvars[which(allvars != "kwh")]
-drop1glm <- drop1(object = maxtractable.glm,
-                test = "LRT", 
-                k = log(nrow(maxtractable.glm$model)),
-                trace = TRUE)
-# Sort drop1glm according to Pr(>Chi) descending
-drop1glm[ order(drop1glm[,5], decreasing = TRUE), ]
-# All the main effects and interaction terms used in the original model
-attr(cdhlagmat.toucomps.maxglm$terms, "term.labels")
+nlags = 0
+
+# Set up 3D results dataframe
+df.stepresults <- data.frame(num.cdhlags = numeric(),
+                             num.explvars = numeric(),
+                             deviance.null = numeric(),
+                             deviance.residuals = numeric(),
+                             AICc = numeric(),
+                             BIC = numeric(),
+                             mcfadden.r2 = numeric(),
+                             formulastr = character(),
+                             variable.removed = character())
+
+# Iterate through all steps of the current nlag
+for(i in 0:nlags) {
+  maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
+                                                           nlags = i,
+                                                           wghts = weights)
+  # Copy trimmed dataframe created within function for use later
+  df.trimmed <- maxtractable.glm$model
+  
+  # I know... iteratively building a data.frame is bad
+  maxtractable.glm.pwr <- IterativeGlmPower(maxtractable.glm)
+  explvars <- attr(maxtractable.glm$terms, "term.labels")
+  df.stepresults <- rbind(df.stepresults,
+                          data.frame(num.cdhlags = nlags,
+                                     num.explvars = length(explvars),
+                                     deviance.null = maxtractable.glm$null.deviance,
+                                     deviance.residuals = maxtractable.glm$deviance,
+                                     AICc = maxtractable.glm.pwr[1,2],
+                                     BIC = maxtractable.glm.pwr[1,3],
+                                     mcfadden.r2 = maxtractable.glm.pwr[1,4],
+                                     formulastr = Reduce(paste, 
+                                                         deparse(maxtractable.glm$formula,
+                                                                 width.cutoff = 500)),
+                                     variable.removed = ""))
+  
+  # Print status update
+  print(explvars)
+  
+  # Flag whether stepwise deletion of variables has completed
+  is.stepwise.nlags.complete = FALSE
+  while (is.stepwise.nlags.complete == FALSE) {
+    drop1.results <- drop1(object = maxtractable.glm,
+                           test = "LRT", 
+                           k = log(nrow(maxtractable.glm$model)))
+    # Sort drop1.results according to Pr(>Chi) descending, grab least
+    # significant term and assign to a variable.
+    explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,5], 
+                                                  decreasing = TRUE), ][1,])
+    
+    # If stepwise has reached the y-intercept, then no more model reduction can 
+    # be done. Stop and iterate to the next cdhlag.
+    if (explvar.leastsig == "<none>") {
+      is.stepwise.nlags.complete = TRUE
+    } else {
+      # Remove least significant variable and update the GLM
+      maxtractable.glm <- update(maxtractable.glm, 
+                                 paste("~ . -", explvar.leastsig))
+      
+      # Record results from simplified GLM
+      maxtractable.glm.pwr <- IterativeGlmPower(maxtractable.glm)
+      explvars <- attr(maxtractable.glm$terms, "term.labels")
+      df.stepresults <- rbind(df.stepresults,
+                              data.frame(num.cdhlags = nlags,
+                                         num.explvars = length(explvars),
+                                         deviance.null = maxtractable.glm$null.deviance,
+                                         deviance.residuals = maxtractable.glm$deviance,
+                                         AICc = maxtractable.glm.pwr[1,2],
+                                         BIC = maxtractable.glm.pwr[1,3],
+                                         mcfadden.r2 = maxtractable.glm.pwr[1,4],
+                                         formulastr = Reduce(paste, 
+                                                             deparse(maxtractable.glm$formula,
+                                                                     width.cutoff = 500)),
+                                         variable.removed = explvar.leastsig))
+      
+      # Print status update
+      print(explvars)
+    }
+  }
+}
 
 ##
 # BIC.GLM leap variant work-in-progress
