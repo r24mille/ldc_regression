@@ -2,6 +2,7 @@ library(stargazer) # LaTeX tables
 library(segmented) # Find linear regression breakpoint
 library(sme) # For AICc function
 library(BMA) # Compare GLM models
+library(rgl) # OpenGL plotting in R
 
 # Source the function in another file
 source('glm_method_iteration.R')
@@ -128,7 +129,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 ##
 # STEP Work-in-Progress
-nlags = 0
+nlags = 26
 
 # Set up 3D results dataframe
 df.stepresults <- data.frame(num.cdhlags = numeric(),
@@ -228,13 +229,21 @@ for(i in 0:nlags) {
 df.stepresults.trimmed <- subset(df.stepresults, num.explvars > 0)
 wireframe(BIC ~ num.explvars * num.cdhlags, 
           data = df.stepresults.trimmed,
-          xlab = "Number of Explanatory Variables", 
-          ylab = "Number of Past Hours Included",
-          zlab = "McFadden Pseudo R-squared", 
-          main = "Stepwise Removal of Terms from Maximal Model",
+          xlab = list("Number of Explanatory Variables", rot=-13), 
+          ylab = list("Number of Past Hours Included", rot=65),
+          zlab = list("Bayesian Information Criterion (BIC)", rot=90), 
+          main = "Change in BIC During Stepwise Removal of Terms from Maximal Model",
           drape = TRUE,
           colorkey = TRUE,
-          screen = list(z = -60, x = -60))
+          scales = list(arrows = FALSE), # Switches unlabelled arrows to ticks
+          screen = list(z = -20, x = -60))
+
+minbic <- min(df.stepresults.trimmed$BIC)
+df.testcloud <- data.frame(thex = c(40, 43, 45), they = c(3, 4, 5), thez = c(-5000, -1000, -2000))
+cloud(thez ~ thex * they, data = df.testcloud)
+
+# Decent setting for BIC
+# screen = list(z = -20, x = -60)
 
 ##
 # BIC.GLM leap variant work-in-progress
