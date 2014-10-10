@@ -2,7 +2,8 @@ library(stargazer) # LaTeX tables
 library(segmented) # Find linear regression breakpoint
 library(sme) # For AICc function
 library(BMA) # Compare GLM models
-library(rgl) # OpenGL plotting in R
+library(reshape) # Reshape data.frame for the heatmap
+library(rgl) # OpenGL functionality in R for better 3D plots
 
 # Source the function in another file
 source('glm_method_iteration.R')
@@ -143,7 +144,7 @@ df.stepresults <- data.frame(num.cdhlags = numeric(),
                              variable.removed = character())
 
 # Iterate through all steps of the current nlag
-for(i in 0:nlags) {
+for(i in 9:nlags) {
   maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
                                                            nlags = i,
                                                            wghts = weights)
@@ -238,9 +239,30 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
           scales = list(arrows = FALSE), # Switches unlabelled arrows to ticks
           screen = list(z = -20, x = -60))
 
-minbic <- min(df.stepresults.trimmed$BIC)
-df.testcloud <- data.frame(thex = c(40, 43, 45), they = c(3, 4, 5), thez = c(-5000, -1000, -2000))
-cloud(thez ~ thex * they, data = df.testcloud)
+# Commenting out cloud points for now
+# minbic <- min(df.stepresults.trimmed$BIC)
+# df.testcloud <- data.frame(thex = c(40, 43, 45), they = c(3, 4, 5), thez = c(-5000, -1000, -2000))
+# cloud(thez ~ thex * they, data = df.testcloud)
+
+# That same information plotted with RGL
+df.heat <- df.stepresults.trimmed
+df.heat.reshape <- melt(data = df.heat,
+                id.vars = c("num.cdhlags", "num.explvars"),
+                measure.vars = c("BIC"))
+cast.heat <- cast(data = df.heat.reshape, 
+                         formula = num.cdhlags ~ num.explvars)
+stepresults.matrix <- as.matrix(cast.heat)
+bic.lim <- range(df.stepresults.trimmed$BIC)
+bic.len <- bic.lim[2] - bic.lim[1] + 1
+hgt.lookup <- terrain.colors(bic.len) # height color lookup table
+bic.colors <- hgt.lookup[stepresults.matrix - bic.lim[1] + 1] # assign colors to heights
+persp3d(x = seq(0, (nrow(stepresults.matrix) - 1), len = nrow(stepresults.matrix)),
+        y = seq(1, ncol(stepresults.matrix), len = ncol(stepresults.matrix)),
+        z = stepresults.matrix, 
+        xlab = "Number of Past Hours Included",
+        ylab = "Number of Explanatory Variables",
+        zlab = "Bayesian Information Criterion (BIC)",
+        col = bic.colors)
 
 # Decent setting for BIC
 # screen = list(z = -20, x = -60)
