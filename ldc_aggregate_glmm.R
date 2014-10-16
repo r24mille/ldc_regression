@@ -17,8 +17,8 @@ readings.aggregate <- read.csv(fpath)
 
 # Re-orders TOU Period levels so that graphs are sorted accordingly
 readings.aggregate$tou_period <- factor(readings.aggregate$tou_period, 
-                              c("off_weekend", "off_morning", "mid_morning", 
-                                "on_peak", "mid_evening", "off_evening"))
+                                        c("off_weekend", "off_morning", "mid_morning", 
+                                          "on_peak", "mid_evening", "off_evening"))
 
 ##
 # Add column which represents "month" as a categorical factor
@@ -89,8 +89,8 @@ weights <- readings.aggregate$agg_count/maxagg
 #                 Maybe just making an empirical choice for CDH break within 
 #                 the context of the final model is the best choice.
 model.readings.glm.presegment <- glm(kwh ~ temperature*tou_period*billing_active,
-                                   data = readings.aggregate,
-                                   family = Gamma(link="log"))
+                                     data = readings.aggregate,
+                                     family = Gamma(link="log"))
 seg <- segmented(obj = model.readings.glm.presegment, 
                  seg.Z = ~temperature,
                  psi = list(temperature = c(18)))
@@ -130,7 +130,7 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 
 ##
 # STEP Work-in-Progress
-nlags = 26
+nlags = 24
 
 # Set up 3D results dataframe
 df.stepresults <- data.frame(num.cdhlags = numeric(),
@@ -144,10 +144,11 @@ df.stepresults <- data.frame(num.cdhlags = numeric(),
                              variable.removed = character())
 
 # Iterate through all steps of the current nlag
-for(i in 9:nlags) {
-  maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
-                                                           nlags = i,
+for(i in 5:nlags) {
+  maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate, 
+                                                           nlags = i, 
                                                            wghts = weights)
+
   # Copy trimmed dataframe created within function for use later
   df.trimmed <- maxtractable.glm$model
   num.observations <- nrow(df.trimmed)
@@ -177,10 +178,10 @@ for(i in 9:nlags) {
     drop1.results <- drop1(object = maxtractable.glm,
                            test = "LRT", 
                            k = log(num.observations))
-    # Sort drop1.results according to Pr(>Chi) descending, grab least
-    # significant term and assign to a variable.
-    explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,5], 
-                                                  decreasing = TRUE), ][1,])
+    # Sort drop1.results according to BIC descending, remove the term resulting 
+    # in the highest BIC.
+    explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,3], 
+                                                      decreasing = FALSE), ][1,])
     
     # If stepwise has reached the y-intercept, then no more model reduction can 
     # be done (linear seperability issue). Stop and iterate to the next cdhlag.
@@ -231,13 +232,15 @@ df.stepresults.trimmed <- subset(df.stepresults, num.explvars > 0)
 wireframe(BIC ~ num.explvars * num.cdhlags, 
           data = df.stepresults.trimmed,
           xlab = list("Number of Explanatory Variables", rot=-13), 
-          ylab = list("Number of Past Hours Included", rot=65),
-          zlab = list("Bayesian Information Criterion (BIC)", rot=90), 
+          ylab = list(expression(paste("Hours of Temp.>", CDH['break'], " Included")), rot=65),
+          zlab = list("Bayesian Information Criterion (BIC)", rot=92), 
           main = "Change in BIC During Stepwise Removal of Terms from Maximal Model",
           drape = TRUE,
           colorkey = TRUE,
           scales = list(arrows = FALSE), # Switches unlabelled arrows to ticks
           screen = list(z = -20, x = -60))
+# Decent setting for BIC
+# screen = list(z = -20, x = -60)
 
 # Commenting out cloud points for now
 # minbic <- min(df.stepresults.trimmed$BIC)
@@ -247,10 +250,10 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
 # That same information plotted with RGL
 df.heat <- df.stepresults.trimmed
 df.heat.reshape <- melt(data = df.heat,
-                id.vars = c("num.cdhlags", "num.explvars"),
-                measure.vars = c("BIC"))
+                        id.vars = c("num.cdhlags", "num.explvars"),
+                        measure.vars = c("BIC"))
 cast.heat <- cast(data = df.heat.reshape, 
-                         formula = num.cdhlags ~ num.explvars)
+                  formula = num.cdhlags ~ num.explvars)
 stepresults.matrix <- as.matrix(cast.heat)
 bic.lim <- range(df.stepresults.trimmed$BIC)
 bic.len <- bic.lim[2] - bic.lim[1] + 1
@@ -262,11 +265,129 @@ persp3d(x = seq(0, (nrow(stepresults.matrix) - 1), len = nrow(stepresults.matrix
         xlab = "Number of Past Hours Included",
         ylab = "Number of Explanatory Variables",
         zlab = "Bayesian Information Criterion (BIC)",
+        main = "Change in BIC During Stepwise Removal of Terms from Maximal Model",
         col = bic.colors)
 
-# Decent setting for BIC
-# screen = list(z = -20, x = -60)
+# Heatmap
+#maxbic <- max(df.stepresults.trimmed$BIC)
+#stepresults.matrix[which(is.na(stepresults.matrix))] = maxbic;
+heatmap(stepresults.matrix, 
+        Rowv=NA, 
+        Colv=NA, 
+        col = heat.colors(round(bic.len) * 2), 
+        margins=c(5,10),
+        na.rm = TRUE)
+
+# ADD1 STEP work-in-process
+# Iterate steps forward and store in a similar dataframe
+nlags = 24
+
+df.results.stepforward <- data.frame(num.cdhlags = numeric(),
+                                     num.explvars = numeric(),
+                                     deviance.null = numeric(),
+                                     deviance.residuals = numeric(),
+                                     AICc = numeric(),
+                                     BIC = numeric(),
+                                     mcfadden.r2 = numeric(),
+                                     formulastr = character(),
+                                     variable.added = character())
+
+# Iterate through all steps of the current nlag
+for(i in 0:nlags) {
+  # Iterate through all steps of the current nlag
+  maxtractable.glm <- IterativeGlmModel(df.readings = readings.aggregate, 
+                                        wghts = weights, 
+                                        nlags = i, 
+                                        is.touperiod = FALSE, 
+                                        is.cdhlagsum = FALSE, 
+                                        is.maxformula = TRUE)
+  maxformulastr <- Reduce(paste, 
+                          deparse(maxtractable.glm$formula,
+                                  width.cutoff = 500))
+  formula.maxtractable <- formula(maxformulastr)
+  
+  # Copy trimmed dataframe created within function for use later
+  df.trimmed <- maxtractable.glm$model
+  num.observations <- nrow(df.trimmed)
+  
+  # Use the y-intercept GLM as a starting point
+  thewghts <- weights
+  stepwise.glm <- glm(formula = "kwh ~ 1", 
+                      data = df.trimmed, 
+                      weights = thewghts, 
+                      family = Gamma(link="log"))
+  
+  # I know... iteratively building a data.frame is bad  
+  is.stepwise.nlags.complete = FALSE
+  while (is.stepwise.nlags.complete == FALSE) {
+    add1.results <- add1(object = stepwise.glm,
+                         scope = formula.maxtractable,
+                         test = "LRT", 
+                         k = log(num.observations))
+    # Sort add1.results according to information criteria and assign to a 
+    # variable.
+    explvar.lowestAIC <- rownames(add1.results[ order(add1.results[,3], 
+                                                      decreasing = FALSE), ][1,])
+    
+    # If stepwise has reached the y-intercept, then no more model construction
+    # can be done.
+    if (explvar.lowestAIC == "<none>") {
+      is.stepwise.nlags.complete = TRUE
+    } else {
+      # Remove least significant variable and update the GLM
+      stepwise.glm <- update(stepwise.glm, 
+                             paste("~ . + ", explvar.lowestAIC))
+      
+      # Record results from simplified GLM
+      stepwise.glm.pwr <- IterativeGlmPower(stepwise.glm)
+      explvars <- attr(stepwise.glm$terms, "term.labels")
+      df.results.stepforward <- rbind(df.results.stepforward,
+                                      data.frame(num.cdhlags = i,
+                                                 num.explvars = length(explvars),
+                                                 deviance.null = stepwise.glm$null.deviance,
+                                                 deviance.residuals = stepwise.glm$deviance,
+                                                 AICc = stepwise.glm.pwr[1,2],
+                                                 BIC = stepwise.glm.pwr[1,3],
+                                                 mcfadden.r2 = stepwise.glm.pwr[1,4],
+                                                 formulastr = Reduce(paste, 
+                                                                     deparse(stepwise.glm$formula,
+                                                                             width.cutoff = 500)),
+                                                 variable.added = explvar.lowestAIC))
+      
+      print(explvars)
+    }
+  }
+}
+
+df.results.stepforward.trimmed <- subset(df.results.stepforward, num.explvars > 0)
+wireframe(BIC ~ num.explvars * num.cdhlags, 
+          data = df.results.stepforward.trimmed,
+          xlab = list("Number of Explanatory Variables", 
+                      rot=-13), 
+          ylab = list("Number of Past Hours of Temp. > CDH_break Included", 
+                      rot=65),
+          zlab = list("Bayesian Information Criterion (BIC)", 
+                      rot=90), 
+          main = "Change in BIC During Stepwise Addition of Terms to GLM",
+          drape = TRUE,
+          colorkey = TRUE,
+          scales = list(arrows = FALSE), # Switches unlabelled arrows to ticks
+          screen = list(z = -20, x = -60))
+
 
 ##
 # BIC.GLM leap variant work-in-progress
 # bic.glm(...) isn't working due to singularity issues, I believe.
+# averagingtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
+#                                                          nlags = 8,
+#                                                          wghts = wghts)
+# df.averaging.trimmed <- averagingtractable.glm$model
+# formula.string.averaging = Reduce(paste, deparse(averagingtractable.glm$formula, 
+#                                                  width.cutoff = 500))
+# formula.averaging <- formula(formula.string.averaging)
+# bma.results <- bic.glm(f = formula.averaging,
+#                        data = df.averaging.trimmed,
+#                        glm.family = Gamma(link="log"),
+#                        wt = wghts,
+#                        maxCol = 50,
+#                        nbest = 5)
