@@ -141,14 +141,15 @@ df.stepresults <- data.frame(num.cdhlags = numeric(),
                              BIC = numeric(),
                              mcfadden.r2 = numeric(),
                              formulastr = character(),
-                             variable.removed = character())
+                             variable.removed = character(),
+                             probability.gt.chi = numeric())
 
 # Iterate through all steps of the current nlag
-for(i in 5:nlags) {
+for(i in 0:nlags) {
   maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate, 
                                                            nlags = i, 
                                                            wghts = weights)
-
+  
   # Copy trimmed dataframe created within function for use later
   df.trimmed <- maxtractable.glm$model
   num.observations <- nrow(df.trimmed)
@@ -167,7 +168,8 @@ for(i in 5:nlags) {
                                      formulastr = Reduce(paste, 
                                                          deparse(maxtractable.glm$formula,
                                                                  width.cutoff = 500)),
-                                     variable.removed = ""))
+                                     variable.removed = "",
+                                     probability.gt.chi = 0))
   
   # Print status update
   print(explvars)
@@ -180,8 +182,10 @@ for(i in 5:nlags) {
                            k = log(num.observations))
     # Sort drop1.results according to BIC descending, remove the term resulting 
     # in the highest BIC.
-    explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,3], 
-                                                      decreasing = FALSE), ][1,])
+    explvar.leastsig <- rownames(drop1.results[ order(drop1.results[,5], 
+                                                      decreasing = TRUE), ][1,])
+    pr.gt.chi <- drop1.results[ order(drop1.results[,5], 
+                                      decreasing = TRUE), ][1,5]
     
     # If stepwise has reached the y-intercept, then no more model reduction can 
     # be done (linear seperability issue). Stop and iterate to the next cdhlag.
@@ -189,6 +193,8 @@ for(i in 5:nlags) {
     # TODO(r24mille): Can this be corrected in the MaximumTractableInteractionsGlmModel(...)
     #                 function?
     if (explvar.leastsig == "<none>") {
+      is.stepwise.nlags.complete = TRUE
+    } else if (pr.gt.chi < 0.05) { # Term is statistically significant, stop.
       is.stepwise.nlags.complete = TRUE
     } else {
       # Remove least significant variable and update the GLM
@@ -209,7 +215,8 @@ for(i in 5:nlags) {
                                          formulastr = Reduce(paste, 
                                                              deparse(maxtractable.glm$formula,
                                                                      width.cutoff = 500)),
-                                         variable.removed = explvar.leastsig))
+                                         variable.removed = explvar.leastsig,
+                                         probability.gt.chi = pr.gt.chi))
       
       # Print status update
       if (length(explvars) == 0) {
@@ -290,7 +297,8 @@ df.results.stepforward <- data.frame(num.cdhlags = numeric(),
                                      BIC = numeric(),
                                      mcfadden.r2 = numeric(),
                                      formulastr = character(),
-                                     variable.added = character())
+                                     variable.added = character(),
+                                     probability.gt.chi = numeric())
 
 # Iterate through all steps of the current nlag
 for(i in 0:nlags) {
@@ -304,6 +312,7 @@ for(i in 0:nlags) {
   maxformulastr <- Reduce(paste, 
                           deparse(maxtractable.glm$formula,
                                   width.cutoff = 500))
+  maxformulastr <- paste(maxformulastr, " - hrstr:price - weekend:price")
   formula.maxtractable <- formula(maxformulastr)
   
   # Copy trimmed dataframe created within function for use later
@@ -326,17 +335,23 @@ for(i in 0:nlags) {
                          k = log(num.observations))
     # Sort add1.results according to information criteria and assign to a 
     # variable.
-    explvar.lowestAIC <- rownames(add1.results[ order(add1.results[,3], 
-                                                      decreasing = FALSE), ][1,])
+    explvar.lowestPVal <- rownames(add1.results[ order(add1.results[,5], 
+                                                      decreasing = FALSE,
+                                                      na.last = NA), ][1,])
+    pr.gt.chi <- add1.results[ order(add1.results[,5], 
+                                     decreasing = FALSE, 
+                                     na.last = NA), ][1,5]
     
     # If stepwise has reached the y-intercept, then no more model construction
     # can be done.
-    if (explvar.lowestAIC == "<none>") {
+    if (explvar.lowestPVal == "<none>") {
       is.stepwise.nlags.complete = TRUE
-    } else {
+    } else if (pr.gt.chi > 0.05) { # Addition of term is not significant at p=0.05
+      is.stepwise.nlags.complete = TRUE
+    }else {
       # Remove least significant variable and update the GLM
       stepwise.glm <- update(stepwise.glm, 
-                             paste("~ . + ", explvar.lowestAIC))
+                             paste("~ . + ", explvar.lowestPVal))
       
       # Record results from simplified GLM
       stepwise.glm.pwr <- IterativeGlmPower(stepwise.glm)
@@ -352,7 +367,8 @@ for(i in 0:nlags) {
                                                  formulastr = Reduce(paste, 
                                                                      deparse(stepwise.glm$formula,
                                                                              width.cutoff = 500)),
-                                                 variable.added = explvar.lowestAIC))
+                                                 variable.added = explvar.lowestPVal,
+                                                 probability.gt.chi = pr.gt.chi))
       
       print(explvars)
     }
