@@ -141,10 +141,12 @@ MaximumTractableInteractionsGlmModel <- function(df.readings, nlags, wghts) {
   # Create a column that represents only the feasible interactions of hrstr and
   # price columns. Then remove the hrstr:price interaction from the formula
   # string.
-  df.trimmed$hrstr_price <- paste0(df.trimmed$hrstr, df.trimmed$price)
+  # TODO(r24mille): The predict(...) and other functions all seem to baulk 
+  #                 at the collinearity caused by the hrst:price term. Remove 
+  #                 it from the model for now unless a solution can be found.
+  #df.trimmed$hrstr_price <- paste0(df.trimmed$hrstr, df.trimmed$price)
   tractable.fmlastr <- paste(tractable.fmlastr, 
-                             "- hrstr:price", 
-                             "+ hrstr_price")
+                            "- hrstr:price")
   
   # Create a column that represents only the feasible interaction of weekend and 
   # price columns. Then remove the weekend:price interaction from the formula 
