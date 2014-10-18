@@ -258,3 +258,127 @@ PlotGlmFitMeasures <- function (aiccs, bics, y2vals, xvals,
                     "BIC",
                     y2title))
 }
+
+Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic, 
+                                                           title, subtitle) {
+  # Plots 2D representation of a goodness-of-fit measure as a function of the
+  # explanatory variable count. Multiple lines are plotted, each creating a 
+  # plot for the number of past hours' temperature measurements included.
+  #
+  # Args:
+  #   df.steps: A dataframe of stepwise goodness-of-fit results.
+  #   is.bic: A boolean indicating whether the goodness-of-fit measure is BIC.
+  #           If FALSE, then Pseudo-R^2 is used.
+  #   title: The title of the plot, to be passed to the "main" parameter.
+  #   subtitle: The subtitle of the plot, to be passed to the "sub" parameter.
+  xrng <- c(min(df.steps$num.explvars), max(df.steps$num.explvars))
+  if (is.bic == TRUE) {
+    yrng <- c(min(df.steps$BIC - 250), max(df.steps$BIC))
+  } else {
+    yrng <- c(min(df.steps$mcfadden.r2), max(df.steps$mcfadden.r2))
+  }
+  
+  # Picked up 6 hues, 4 shades of each hue, to cover 24 lines
+  # Values are from ColorBrewer2 http://colorbrewer2.org/
+  seqcols <- c(rgb(158, 202, 225, 255, maxColorValue=255),
+               rgb(161, 217, 155, 255, maxColorValue=255),
+               rgb(189, 189, 189, 255, maxColorValue=255),
+               rgb(253, 174, 107, 255, maxColorValue=255),
+               rgb(188, 189, 220, 255, maxColorValue=255),
+               rgb(252, 146, 114, 255, maxColorValue=255),
+               rgb(66, 146, 198, 255, maxColorValue=255),
+               rgb(65, 171, 93, 255, maxColorValue=255),
+               rgb(115, 115, 115, 255, maxColorValue=255),
+               rgb(241, 105, 19, 255, maxColorValue=255),
+               rgb(128, 125, 186, 255, maxColorValue=255),
+               rgb(239, 59, 44, 255, maxColorValue=255),
+               rgb(8, 81, 156, 255, maxColorValue=255),
+               rgb(0, 109, 44, 255, maxColorValue=255),
+               rgb(37, 37, 37, 255, maxColorValue=255),
+               rgb(166, 54, 3, 255, maxColorValue=255),
+               rgb(84, 39, 143, 255, maxColorValue=255),
+               rgb(165, 15, 21, 255, maxColorValue=255),
+               rgb(8, 48, 107, 255, maxColorValue=255),
+               rgb(0, 68, 27, 255, maxColorValue=255),
+               rgb(0, 0, 0, 255, maxColorValue=255),
+               rgb(127, 39, 4, 255, maxColorValue=255),
+               rgb(63, 0, 125, 255, maxColorValue=255),
+               rgb(103, 0, 13, 255, maxColorValue=255))
+    
+  # Set some plot attributes
+  par(xpd = TRUE, # turn off clipping
+      mar = c(6, 4.5, 3, 6.5)) # Add margins to the right (b, l, t, r)
+  
+  # Plot current temperature information
+  df.steps.subset <- subset(df.steps, num.cdhlags == 0)
+  if (is.bic == TRUE) {
+    yvals <- df.steps.subset$BIC
+    ylabel <- "Bayesian Informaion Criterion (BIC)"
+  } else {
+    yvals <- df.steps.subset$mcfadden.r2
+    ylabel <- "McFadden's Pseudo-R^2"
+  }
+  plot(x = df.steps.subset$num.explvars,
+       y = yvals, 
+       type = "l", 
+       xlab = "Number of Explanatory Variables", 
+       xlim = xrng, 
+       ylab = ylabel, 
+       ylim = yrng, 
+       main = title,
+       sub = subtitle, 
+       bty = "L", 
+       col = seqcols[1], 
+       lty = 1,
+       lwd = 2,) # line width
+  
+  # Iterate through the other numbers of hours into the past
+  maxcdhlags <- max(df.steps$num.cdhlags)
+  for (i in 0:maxcdhlags) {
+    df.steps.subset <- subset(df.steps, num.cdhlags == i)
+    if (is.bic == TRUE) {
+      yvals <- df.steps.subset$BIC
+      ypnt <- min(df.steps.subset$BIC)
+      df.steps.yset <- subset(df.steps.subset, BIC == ypnt)
+      xpnt <- df.steps.yset[1, "num.explvars"]
+      critpnt.label <- c(round(ypnt, 1))
+      textposition <- 1 # below
+    } else {
+      yvals <- df.steps.subset$mcfadden.r2
+      ypnt <- max(df.steps.subset$mcfadden.r2)
+      df.steps.yset <- subset(df.steps.subset, mcfadden.r2 == ypnt)
+      xpnt <- df.steps.yset[1, "num.explvars"]
+      critpnt.label <- c(round(ypnt, 3))
+      textposition <- 1 # below
+    }
+    
+    lines(x = df.steps.subset$num.explvars,
+         y = yvals,
+         col = seqcols[(i+1)], 
+         lty = (i + 1),
+         lwd = 2) # line width
+    
+    # Label the critcal y value
+    points(x = xpnt,
+           y = ypnt,
+           pch = 20, # dot
+           col = seqcols[(i+1)])
+    
+    text(x = xpnt, 
+         xlim = xrng,
+         y = ypnt, 
+         ylim = yrng, 
+         labels = critpnt.label, 
+         pos = textposition, 
+         cex = 0.6, # 50% font size
+         offset = 0.25,
+         col = "black") 
+  }
+  
+  legend(x = (xrng[2] + 5),
+         y = yrng[2],
+         legend = paste(c(0:maxcdhlags), "hrs."), 
+         lty = c(1:(maxcdhlags+1)),
+         lwd = 2,
+         col = seqcols)
+}

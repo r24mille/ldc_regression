@@ -407,3 +407,9 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
 #                        wt = wghts,
 #                        maxCol = 50,
 #                        nbest = 5)
+
+
+Plot2DFitByExplVarCountWithMultiplePastHrsTemp(df.steps = df.stepresults,
+                                               is.bic = TRUE,
+                                               title = "BIC Change as Terms are Removed from Maximal Models",
+                                               subtitle = "(p-value stopping criterion)")
