@@ -7,6 +7,8 @@ library(rgl) # OpenGL functionality in R for better 3D plots
 
 # Source the function in another file
 source('glm_method_iteration.R')
+# Fixes the AIC measure in the add1(...) and drop1(...) functions, also BIC
+assignInNamespace(x="extractAIC.glm", value=fixedGamma_extractAIC, ns="stats")
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")

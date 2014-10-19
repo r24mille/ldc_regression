@@ -3,6 +3,91 @@ library(MASS) # For correcting Gamma glm AIC
 source('goodness_fit_visualization.R')
 source('pseudo_rsquared.R')
 
+GammaAIC <- function(fit) {
+  # As per ?glm documentation, the default AIC value is wrong, "For gaussian,
+  # Gamma and inverse gaussian families the dispersion is estimated from the
+  # residual deviance, and the number of parameters is the number of
+  # coefficients plus one. For a gaussian family the MLE of the dispersion is
+  # used so this is a valid value of AIC, but for Gamma and inverse gaussian
+  # families it is not."
+  #
+  # See supporting discussion at:
+  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
+  #
+  # This function is inspired by that StackOverflow discussion. The conventional definition for AIC is:
+  #
+  # AIC = 2k − 2log(L) 
+  # 
+  # Where k is number of parameters and L is likelihood.
+  #
+  # Args:
+  #   fit: A model fit by GLM, of family=Gamma()
+  #
+  # Return:
+  #   A more accurate AIC value for the fitted model.
+  
+  # Dispersion is reciprocal of the estimate of the shape (eg. 1/shape) See
+  # MASS:::gamma.dispersion
+  # 
+  # gamma.shape is estimated through maximum likelihood after fitting a Gamma
+  # general linear model (ie. fit parameter). See ?MASS::gamma.shape
+  # 
+  # From documentation, "A glm fit for a Gamma family correctly calculates the
+  # maximum likelihood estimate of the mean parameters but provides only a crude
+  # estimate of the dispersion parameter. This function takes the results of the
+  # glm fit and solves the maximum likelihood equation for the reciprocal of the
+  # dispersion parameter, which is usually called the shape (or exponent) 
+  # parameter."
+  # 
+  # So this method is a more accurate value for dispersion than the default
+  # fit$deviance/length(fit$residuals).
+  disp <- MASS::gamma.dispersion(fit) 
+  # Rank is the number of parameters
+  k <- fit$rank
+  mu <- fit$fitted.values
+  y <- fit$y
+  return (2 * k - 2 * sum(dgamma(y, 1/disp, scale = mu * disp, log = TRUE)))
+}
+
+GammaAICc <- function(fit) {
+  # Corrected AICc which uses the more accurate GammaAIC(...) function to 
+  # computer the corrected AIC value. The equation for AICc is:
+  #
+  # AICc = AIC + (2k(k+1))/(n-k-1)
+  #
+  # Where k is the number of parameters and n denotes the sample size.
+  #
+  # See supporting discussion at:
+  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
+  # 
+  # Args: 
+  #   fit: A model fit by GLM, of family=Gamma()
+  # 
+  # Return: 
+  #   A more accurate AICc value that incorporates the more accurate
+  #   GammaAIC(...) function.
+  val <- logLik(fit)
+  k <- attributes(val)$df
+  n <- attributes(val)$nobs
+  return (GammaAIC(fit) + 2 * k * (k + 1) / (n - k - 1))
+}
+
+fixedGamma_extractAIC <- function(fit, scale=0, k=2, ...) {
+  # A function that can fix the AIC measure for glm(family=Gamma()) fitted models
+  # and does not break the AIC valu for other fitted models.
+  #
+  # Args:
+  #   fit: A model fit by GLM, of family=Gamma()
+  n <- length(fit$residuals)
+  edf <- n - fit$df.residual  
+  if (fit$family$family == "Gamma"){
+    aic <- GammaAIC(fit)
+  } else {
+    aic <- fit$aic
+  }
+  return(c(edf, aic + (k - 2) * edf))
+}
+
 CdhLagMaximalFormula <- function(df.trimmed) {
   # This function returns the forumla for all main effects and two-way 
   # interactions of the columns in the trimmed dataframe provided.
