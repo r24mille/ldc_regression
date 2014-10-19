@@ -1,3 +1,5 @@
+library(MASS) # For correcting Gamma glm AIC
+
 source('goodness_fit_visualization.R')
 source('pseudo_rsquared.R')
 
@@ -10,11 +12,8 @@ CdhLagMaximalFormula <- function(df.trimmed) {
   #
   # Returns:
   #   A formula object, where each independent variable is modeled as a fixed 
-  #   effect with main effects and two-way interactions. This function 
-  #   knows not to put the response variable or weights into the formula.
-  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh",
-                                                                  "weights",
-                                                                  "wghts")]) 
+  #   effect with main effects and two-way interactions.
+  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh")]) 
   explvars.fmlastr <- paste(explvars, collapse = " + ")
   maximal.fmlastr <- paste0("kwh ~ (", explvars.fmlastr, ")^2")
   return(formula(maximal.fmlastr))
@@ -34,13 +33,10 @@ CdhLagMaximalNestedFormula <- function(df.trimmed, cdhlagmat.colnames) {
   # 
   # Returns:
   #   A formula object, where the lagged obervation terms are nested, and 
-  #   two-way interracted with other main effects. This function knows not to
-  #   put the response variable or weights into the formula.
+  #   two-way interracted with other main effects.
   allcolnames <- colnames(df.trimmed)
   noncdh.colnames <- allcolnames[! allcolnames %in% c(cdhlagmat.colnames, 
-                                               "kwh",
-                                               "weights",
-                                               "wghts")]
+                                               "kwh")]
   noncdh.fmlastr <- paste(noncdh.colnames,
                           collapse = " + ")
   nestedcdhlag.fmlastr <- paste(cdhlagmat.colnames,
@@ -113,27 +109,23 @@ CreateCdhLagMatrix <- function(nlags, readingsdf) {
   return(cdhlags)
 }
 
-MaximumTractableInteractionsGlmModel <- function(df.readings, nlags, wghts) {
+MaximumTractableInteractionsGlmModel <- function(df.readings, nlags) {
   # Certain two-way interactions can never interract all levels of each 
   # categorical explanatory variable (eg. weekend="Yes":price="on_peak"). So, 
   # the interacted term must be broken into its own column and then the 
   # formula updated to reflect the fact that
   #
   # Args:
-  #   df.trimmed: A trimmed version of the readings.aggregate dataframe with 
-  #               weights as a column.
+  #   df.trimmed: A trimmed version of the readings.aggregate dataframe.
   #
   # Returns:
   #   A formula object, where each independent variable is modeled as a fixed 
-  #   effect with main effects and two-way interactions. This function 
-  #   knows not to put the response variable or weights into the formula.
+  #   effect with main effects and two-way interactions.
   cdhlag <- CreateCdhLagMatrix(nlags, df.readings)
-  readings.with.cdh <- cbind(df.readings, cdhlag, wghts)
+  readings.with.cdh <- cbind(df.readings, cdhlag)
   df.trimmed <- TrimColsTouTimeComponents(readings.with.cdh)
   
-  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh",
-                                                                  "weights",
-                                                                  "wghts")])
+  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh")])
   explvars.fmlastr <- paste(explvars, collapse = " + ")
   maximal.fmlastr <- paste0("kwh ~ (", explvars.fmlastr, ")^2")
   tractable.fmlastr <- maximal.fmlastr
@@ -164,7 +156,6 @@ MaximumTractableInteractionsGlmModel <- function(df.readings, nlags, wghts) {
   # Fit the GLM model
   tractable.glm <- glm(formula = formula(tractable.fmlastr), 
                   data = df.trimmed, 
-                  weights = wghts, 
                   family = Gamma(link="log"))
   return(tractable.glm)
 }
@@ -190,7 +181,7 @@ GlmPowerResultsMatrix <- function(nlags) {
   return(resmatrix)
 }
 
-IterativeGlmModel <- function(df.readings, wghts, nlags, 
+IterativeGlmModel <- function(df.readings, nlags, 
                               is.touperiod, is.cdhlagsum, is.maxformula) {
   # Time-of-Use (TOU) can be represented as a categorical explanatory variable 
   # or its component parts can each be modelled as explanatory variables. 
@@ -202,7 +193,6 @@ IterativeGlmModel <- function(df.readings, wghts, nlags,
   #
   # Args:
   #   df.readings: A dataframe of smart meter readings (likely aggregate)
-  #   wghts: A vector of observation weights passed to the GLM model.
   #   nlags: The number of hours into the past that CDH will consider.
   #   is.touperiod: A boolean indicating whether the categorical tou_period
   #                 explanatory variable is used. If FALSE, then components of 
@@ -225,11 +215,8 @@ IterativeGlmModel <- function(df.readings, wghts, nlags,
     cdhlag <- CreateCdhLagMatrix(nlags, df.readings)
   }
   
-  # Stitch the two data structures together into a dataframe. Also stitch 
-  # weights (ie. wghts) as a column since glm(...) can't take the vector 
-  # as a parameter. It can only read columns from its data=... dataframe. The 
-  # later TrimColsTou functions know to ignore the weights/wghts column.
-  readings.with.cdh <- cbind(df.readings, cdhlag, wghts)
+  # Stitch the two data structures together into a dataframe.
+  readings.with.cdh <- cbind(df.readings, cdhlag)
   
   # Trim dataframe columns appropriate for desired representation of TOU
   if(is.touperiod == TRUE) {
@@ -248,7 +235,6 @@ IterativeGlmModel <- function(df.readings, wghts, nlags,
   # Fit the GLM model
   iter.glm <- glm(formula = fmla, 
                   data = df.trimmed, 
-                  weights = wghts, 
                   family = Gamma(link="log"))
   return(iter.glm)
 }
@@ -324,7 +310,7 @@ IterativeGlmPlotWithResidualDeviance <- function(iter.glm.pwr, maintitle) {
                      title = maintitle)
 }
 
-PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
+PerformTouCdhGlmIterations <- function(df.readings, nhrs) {
   # Steps through 0-nhrs iterations of GLMs trying varioud combinations of 
   # structuring TOU and CDH explanatory variables. The explanatory power of each
   # model is plotted.
@@ -332,7 +318,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
   # Args:
   #   df.readings: A readings dataframe to be passed as the "data" parameter 
   #                to the GLMs.
-  #   weights: Weights to be passed to the GLMs
   #   nhrs: Number of hours to include in the CDH component of the model
   cdhlagsum.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
   cdhlagmat.touperiods.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
@@ -344,7 +329,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
   for(i in 0:nhrs) {
     # 1. Summed CDH lags, TOU as periods
     cdhlagsum.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                     wghts = weights, 
                                                      nlags = i, 
                                                      is.touperiod = TRUE, 
                                                      is.cdhlagsum = TRUE, 
@@ -353,7 +337,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
     
     # 2. Matrix of CDH lags as nested interactions, TOU as periods
     cdhlagmat.touperiods.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                        wghts = weights, 
                                                         nlags = i, 
                                                         is.touperiod = TRUE, 
                                                         is.cdhlagsum = FALSE, 
@@ -362,7 +345,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
     
     # 3. Matrix of CDH lags as two-way interactions, TOU as periods
     cdhlagmat.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                     wghts = weights, 
                                                      nlags = i, 
                                                      is.touperiod = TRUE, 
                                                      is.cdhlagsum = FALSE, 
@@ -371,7 +353,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
     
     # 4. Summed CDH lags, TOU components of time
     cdhlagsum.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                   wghts = weights, 
                                                    nlags = i, 
                                                    is.touperiod = FALSE, 
                                                    is.cdhlagsum = TRUE, 
@@ -380,7 +361,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
     
     # 5. Matrix of CDH lags as nested interactions, TOU components of time
     cdhlagmat.toucomps.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                      wghts = weights, 
                                                       nlags = i, 
                                                       is.touperiod = FALSE, 
                                                       is.cdhlagsum = FALSE, 
@@ -389,7 +369,6 @@ PerformTouCdhGlmIterations <- function(df.readings, weights, nhrs) {
     
     # 6. Matrix of CDH lags as two-way interactions, TOU components of time
     cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                   wghts = weights, 
                                                    nlags = i, 
                                                    is.touperiod = FALSE, 
                                                    is.cdhlagsum = FALSE, 

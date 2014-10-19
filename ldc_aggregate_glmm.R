@@ -56,26 +56,6 @@ readings.aggregate$price <- factor(readings.aggregate$price,
                                    c("off_peak", "mid_peak", "on_peak"))
 
 ##
-# Weight terms based on the number of readings involved in the aggregate average
-#
-# TODO(r24mille): Resid. Dev is lower with weights. Justify this choice.
-#                   * Weights really have more to do with dispersion and non-
-#                     homogeneity of variance. 
-#                   * From ?glm it states, "Non-NULL weights can be used to
-#                     indicate that different observations have different
-#                     dispersions (with the values in weights being inversely
-#                     proportional to the dispersions); or equivalently, when the
-#                     elements of weights are positive integers w_i, that each
-#                     response y_i is the mean of w_i unit-weight observations. For
-#                     a binomial GLM prior weights are used to give the number of
-#                     trials when the response is the proportion of successes: they
-#                     would rarely be used for a Poisson GLM."
-#                   * The 'number of trials' doesn't quite fit with agg_count the 
-#                     way it is written below.
-maxagg <- max(readings.aggregate$agg_count)
-weights <- readings.aggregate$agg_count/maxagg
-
-##
 # Use 'segmented' package rather than my prior home-grown method of finding 
 # the optimal cooling degree hour breakpoint (though they give the same 
 # result).
@@ -110,19 +90,14 @@ readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak,
 #                     not need to be back transformed.
 #                   * Also allows for different GLM models to be compared on the
 #                     same terms using ANOVA (ie. analysis of deviance)
-#                   * Consider quasi(link="_custom_") or confirm that 
-#                     Gamma isn't sensitive to shape and rate parameters. 
-#                     because my variance is not a simple Gamma distribution.
 
 # Commenting out the iterative comparison, now that I have the results from it.
 # PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-#                          nhrs = 5,
-#                          weights = weights)
+#                          nhrs = 5)
 
 # TOU components and each CDH lag as its own coefficient turns out to have the 
 # highest predictive power with 8 hours of history.
 # cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = readings.aggregate, 
-#                                                wghts = weights, 
 #                                                nlags = 8, 
 #                                                is.touperiod = FALSE, 
 #                                                is.cdhlagsum = FALSE, 
@@ -147,8 +122,7 @@ df.stepresults <- data.frame(num.cdhlags = numeric(),
 # Iterate through all steps of the current nlag
 for(i in 0:nlags) {
   maxtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate, 
-                                                           nlags = i, 
-                                                           wghts = weights)
+                                                           nlags = i)
   
   # Copy trimmed dataframe created within function for use later
   df.trimmed <- maxtractable.glm$model
@@ -304,7 +278,6 @@ df.results.stepforward <- data.frame(num.cdhlags = numeric(),
 for(i in 0:nlags) {
   # Iterate through all steps of the current nlag
   maxtractable.glm <- IterativeGlmModel(df.readings = readings.aggregate, 
-                                        wghts = weights, 
                                         nlags = i, 
                                         is.touperiod = FALSE, 
                                         is.cdhlagsum = FALSE, 
@@ -320,10 +293,8 @@ for(i in 0:nlags) {
   num.observations <- nrow(df.trimmed)
   
   # Use the y-intercept GLM as a starting point
-  thewghts <- weights
   stepwise.glm <- glm(formula = "kwh ~ 1", 
                       data = df.trimmed, 
-                      weights = thewghts, 
                       family = Gamma(link="log"))
   
   # I know... iteratively building a data.frame is bad  
@@ -395,8 +366,7 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
 # BIC.GLM leap variant work-in-progress
 # bic.glm(...) isn't working due to singularity issues, I believe.
 # averagingtractable.glm <- MaximumTractableInteractionsGlmModel(df.readings = readings.aggregate,
-#                                                          nlags = 8,
-#                                                          wghts = wghts)
+#                                                          nlags = 8)
 # df.averaging.trimmed <- averagingtractable.glm$model
 # formula.string.averaging = Reduce(paste, deparse(averagingtractable.glm$formula, 
 #                                                  width.cutoff = 500))
@@ -404,12 +374,11 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
 # bma.results <- bic.glm(f = formula.averaging,
 #                        data = df.averaging.trimmed,
 #                        glm.family = Gamma(link="log"),
-#                        wt = wghts,
 #                        maxCol = 50,
 #                        nbest = 5)
 
 
 Plot2DFitByExplVarCountWithMultiplePastHrsTemp(df.steps = df.stepresults,
-                                               is.bic = TRUE,
+                                               is.bic = FALSE,
                                                title = "BIC Change as Terms are Removed from Maximal Models",
                                                subtitle = "(p-value stopping criterion)")
