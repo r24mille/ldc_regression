@@ -25,11 +25,9 @@ plot(x = readings.aggregate.2012$temperature,
 
 # Working GLM for results
 df.trimmed$hour <- readings.aggregate$hour
-wghts <- weights
 working.glm <- glm(data = df.trimmed, 
                    formula = "kwh ~ billing_active + month + hrstr + weekend + price + lag0 + lag1 + lag2 + lag3 + lag4 + lag5 + billing_active:month + billing_active:weekend + billing_active:price + billing_active:lag0 + billing_active:lag1 + billing_active:lag2 + billing_active:lag3 + billing_active:lag4 + billing_active:lag5 + month:weekend + month:price + month:lag0 + month:lag1 + month:lag5 + hrstr:lag0 + hrstr:lag5 + weekend:lag0 + weekend:lag1 + weekend:lag2 + weekend:lag3 + weekend:lag4 + weekend:lag5 + price:lag0 + price:lag1 + price:lag5 + lag0:lag1 + lag0:lag2 + lag0:lag3 + lag0:lag4 + lag0:lag5 + lag1:lag2 + lag1:lag3 + lag1:lag4 + lag1:lag5 + lag2:lag3 + lag2:lag4 + lag2:lag5 + lag3:lag4 + lag3:lag5 + lag4:lag5", 
-                   family = Gamma(link = "log"),
-                   weights = wghts)
+                   family = Gamma(link = "log"))
 df.trimmed.2012 <- subset(df.trimmed, billing_active == "Yes")
 df.trimmed.2012.whatif <- df.trimmed.2012
 df.trimmed.2012.whatif$billing_active <- "No"
