@@ -345,8 +345,8 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
       textposition <- 1 # below
     } else {
       yvals <- df.steps.subset$mcfadden.r2
-      ypnt <- max(df.steps.subset$mcfadden.r2)
-      df.steps.yset <- subset(df.steps.subset, mcfadden.r2 == ypnt)
+      df.steps.yset <- subset(df.steps.subset, BIC == min(df.steps.subset$BIC))
+      ypnt <- df.steps.yset[1, "mcfadden.r2"]
       xpnt <- df.steps.yset[1, "num.explvars"]
       critpnt.label <- c(round(ypnt, 3))
       textposition <- 1 # below
