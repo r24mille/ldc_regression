@@ -303,11 +303,14 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
                rgb(0, 0, 0, 255, maxColorValue=255),
                rgb(127, 39, 4, 255, maxColorValue=255),
                rgb(63, 0, 125, 255, maxColorValue=255),
-               rgb(103, 0, 13, 255, maxColorValue=255))
+               rgb(103, 0, 13, 255, maxColorValue=255),
+               rgb(139, 69,19, 255, maxColorValue=255)) # 25th color is brown
+  
+  lags.unique <- unique(df.steps$num.cdhlags)
     
   # Set some plot attributes
   par(xpd = TRUE, # turn off clipping
-      mar = c(6, 4.5, 3, 6.5)) # Add margins to the right (b, l, t, r)
+      mar = c(6, 4.5, 3, 7.5)) # Add margins to the right (b, l, t, r)
   
   # Plot current temperature information
   df.steps.subset <- subset(df.steps, num.cdhlags == 0)
@@ -316,7 +319,7 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
     ylabel <- "Bayesian Informaion Criterion (BIC)"
   } else {
     yvals <- df.steps.subset$mcfadden.r2
-    ylabel <- "McFadden's Pseudo-R^2"
+    ylabel <- expression(paste("McFadden's Pseudo-", R^2))
   }
   plot(x = df.steps.subset$num.explvars,
        y = yvals, 
@@ -334,7 +337,7 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
   
   # Iterate through the other numbers of hours into the past
   maxcdhlags <- max(df.steps$num.cdhlags)
-  for (i in 0:maxcdhlags) {
+  for (i in lags.unique) {
     df.steps.subset <- subset(df.steps, num.cdhlags == i)
     if (is.bic == TRUE) {
       yvals <- df.steps.subset$BIC
@@ -375,10 +378,11 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
          col = "black") 
   }
   
-  legend(x = (xrng[2] + 5),
+  legend(x = (xrng[2] + 2),
          y = yrng[2],
-         legend = paste(c(0:maxcdhlags), "hrs."), 
-         lty = c(1:(maxcdhlags+1)),
+         title = "Past Hrs. Temp.",
+         legend = paste(lags.unique, "hrs."), 
+         lty = lags.unique + 1,
          lwd = 2,
-         col = seqcols)
+         col = seqcols[c(lags.unique + 1)])
 }
