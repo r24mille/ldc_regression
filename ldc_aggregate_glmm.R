@@ -8,7 +8,7 @@ library(rgl) # OpenGL functionality in R for better 3D plots
 # Source the function in another file
 source('glm_method_iteration.R')
 # Fixes the AIC measure in the add1(...) and drop1(...) functions, also BIC
-assignInNamespace(x="extractAIC.glm", value=fixedGamma_extractAIC, ns="stats")
+#assignInNamespace(x="extractAIC.glm", value=fixedGamma_extractAIC, ns="stats")
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -211,7 +211,7 @@ for(i in 0:nlags) {
 
 # The y-intercept is not interesting, the same for every model, and makes 
 # the plot difficult to look at.
-df.stepresults.trimmed <- subset(df.stepresults, num.explvars > 0)
+df.stepresults.trimmed <- subset(df.stepresults, num.cdhlags < 10)
 wireframe(BIC ~ num.explvars * num.cdhlags, 
           data = df.stepresults.trimmed,
           xlab = list("Number of Explanatory Variables", rot=-13), 
@@ -277,7 +277,7 @@ df.results.stepforward <- data.frame(num.cdhlags = numeric(),
                                      probability.gt.chi = numeric())
 
 # Iterate through all steps of the current nlag
-for(i in 0:nlags) {
+for(i in 17:nlags) {
   # Iterate through all steps of the current nlag
   maxtractable.glm <- IterativeGlmModel(df.readings = readings.aggregate, 
                                         nlags = i, 
@@ -378,9 +378,16 @@ wireframe(BIC ~ num.explvars * num.cdhlags,
 #                        glm.family = Gamma(link="log"),
 #                        maxCol = 50,
 #                        nbest = 5)
-
+df.results.stepforward.trimmed <- subset(df.results.stepforward, num.cdhlags %% 2 == 0)
 
 Plot2DFitByExplVarCountWithMultiplePastHrsTemp(df.steps = df.stepresults,
                                                is.bic = FALSE,
+                                               title = expression(paste("Pseudo-", 
+                                                                        R^2, 
+                                                                        " Change as Terms are Removed from Maximal Models")),
+                                               subtitle = "(p-value<0.05 stopping criterion)")
+
+Plot2DFitByExplVarCountWithMultiplePastHrsTemp(df.steps = df.stepresults,
+                                               is.bic = TRUE,
                                                title = "BIC Change as Terms are Removed from Maximal Models",
-                                               subtitle = "(p-value stopping criterion)")
+                                               subtitle = "(p-value<0.05 stopping criterion)")
