@@ -221,7 +221,6 @@ MaximumTractableInteractionsGlmModel <- function(df.readings, nlags) {
   # TODO(r24mille): The predict(...) and other functions all seem to baulk 
   #                 at the collinearity caused by the hrst:price term. Remove 
   #                 it from the model for now unless a solution can be found.
-  #df.trimmed$hrstr_price <- paste0(df.trimmed$hrstr, df.trimmed$price)
   tractable.fmlastr <- paste(tractable.fmlastr, 
                             "- hrstr:price")
   
@@ -233,7 +232,7 @@ MaximumTractableInteractionsGlmModel <- function(df.readings, nlags) {
   #                 linearly seprable from the main effects of price.
   #                   * Read on linear separability and what can lead to 
   #                     singularities in GLM model fitting.
-  #df.trimmed$wknd_price <- paste0(df.trimmed$weekend, df.trimmed$price)
+  #
   tractable.fmlastr <- paste(tractable.fmlastr, 
                              "- weekend:price")
 

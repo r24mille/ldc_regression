@@ -5,7 +5,8 @@ library(BMA) # Compare GLM models
 library(reshape) # Reshape data.frame for the heatmap
 library(rgl) # OpenGL functionality in R for better 3D plots
 
-# Source the function in another file
+# Source functions in other files
+source('dataframe_processing.R')
 source('glm_method_iteration.R')
 # Fixes the AIC measure in the add1(...) and drop1(...) functions, also BIC
 #assignInNamespace(x="extractAIC.glm", value=fixedGamma_extractAIC, ns="stats")
@@ -16,46 +17,7 @@ fpath <- file.path(home,
                    "../Dropbox/ISS4E/R/", 
                    "full_aggregate_readings.csv")
 readings.aggregate <- read.csv(fpath)
-
-# Re-orders TOU Period levels so that graphs are sorted accordingly
-readings.aggregate$tou_period <- factor(readings.aggregate$tou_period, 
-                                        c("off_weekend", "off_morning", "mid_morning", 
-                                          "on_peak", "mid_evening", "off_evening"))
-
-##
-# Add column which represents "month" as a categorical factor
-readings.aggregate$timestamp_dst <- as.POSIXlt(readings.aggregate$timestamp_dst)
-readings.aggregate$month <- paste0("m", (readings.aggregate$timestamp_dst$mon + 1))
-readings.aggregate$month <- factor(readings.aggregate$month, 
-                                   c("m5", "m6", "m7", "m8", "m9", "m10"))
-
-# Represent hours as levels rather than integers
-readings.aggregate$hrstr <- paste0("h", readings.aggregate$hour)
-readings.aggregate$hrstr <- factor(readings.aggregate$hrstr, 
-                                   c("h0", "h1", "h2", "h3", "h4", "h5", "h6", 
-                                     "h7", "h8", "h9", "h10", "h11", "h12", 
-                                     "h13", "h14", "h15", "h16", "h17", "h18", 
-                                     "h19", "h20", "h21", "h22", "h23"))
-
-##
-# Add yes/no weekend flag
-readings.aggregate$weekend <- ifelse(readings.aggregate$tou_period %in% c("off_weekend"),
-                                     "Yes",
-                                     "No")
-readings.aggregate$weekend <- factor(readings.aggregate$weekend, 
-                                     c("No", 
-                                       "Yes"))
-
-##
-# Add column which converts TOU Period to its price level
-readings.aggregate$price <- readings.aggregate$tou_period
-readings.aggregate$price <- gsub("off_weekend", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("off_morning", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("off_evening", "off_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("mid_morning", "mid_peak", readings.aggregate$price)
-readings.aggregate$price <- gsub("mid_evening", "mid_peak", readings.aggregate$price)
-readings.aggregate$price <- factor(readings.aggregate$price, 
-                                   c("off_peak", "mid_peak", "on_peak"))
+readings.aggregate <- initAggregateReadings(readings.aggregate)
 
 ##
 # Use 'segmented' package rather than my prior home-grown method of finding 
@@ -63,18 +25,14 @@ readings.aggregate$price <- factor(readings.aggregate$price,
 # result).
 #
 # TODO(r24mille): segmented chooses very different cdhbreak numbers based on 
-#                 the model chosen:
-#                      lm(...) is 18
-#                      glm(...) is 18
-#                      glm(..., family=Gamma) is 13
-#                      glm(...,family=Gamma(link="log")) is 16
-#                 Maybe just making an empirical choice for CDH break within 
-#                 the context of the final model is the best choice.
-model.readings.glm.presegment <- glm(kwh ~ temperature*tou_period*billing_active,
+#                 the model chosen. Maybe just making an empirical choice for 
+#                 CDH break within the context of the final model is the best 
+#                 choice.
+model.readings.glm.presegment <- glm(log(kwh)~(month+hrstr+weekend+price+temperature)^2 - hrstr:price - weekend:price,
                                      data = readings.aggregate,
-                                     family = Gamma(link="log"))
+                                     family = gaussian)
 seg <- segmented(obj = model.readings.glm.presegment, 
-                 seg.Z = ~temperature,
+                 seg.Z = ~ temperature,
                  psi = list(temperature = c(18)))
 cdhbreak <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
 readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
