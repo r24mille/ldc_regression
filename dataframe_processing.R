@@ -1,4 +1,4 @@
-addInferredInformation <- function(df) {
+AddInferredInformation <- function(df) {
   # Additional information can be inferred from existing dataframe column 
   # and placed into new columns that may be useful for modelling.
   #
@@ -30,7 +30,7 @@ addInferredInformation <- function(df) {
   return(df)
 }
 
-fixDataTypes <- function(df) {
+FixDataTypes <- function(df) {
   # Takes a data frame of smart meter reading data and fixes the column data types
   #
   # Args:
@@ -45,7 +45,7 @@ fixDataTypes <- function(df) {
   return(df)
 }
 
-initAggregateReadings <- function(df) {
+InitAggregateReadings <- function(df) {
   # Takes the data.frame of the parsed aggregate readings CSV and initializes 
   # datatypes, inferred information, factor levels, and tweaks a few terms 
   # to a feasible subset of interactions.
@@ -55,15 +55,15 @@ initAggregateReadings <- function(df) {
   #
   # Return:
   #   The dataframe initialized and reading for modelling.
-  df <- fixDataTypes(df)
-  df <- addInferredInformation(df)
-  df <- orderFactors(df)
-  df <- stripNonexistantInteractions(df)
+  df <- FixDataTypes(df)
+  df <- AddInferredInformation(df)
+  df <- OrderFactors(df)
+  df <- StripNonexistantInteractions(df)
   
   return(df)
 }
 
-orderFactors <- function(df) {
+OrderFactors <- function(df) {
   # Reorder factors so that model contrasts and graphs make a bit more sense
   # 
   # Args: 
@@ -86,7 +86,7 @@ orderFactors <- function(df) {
   return(df)
 }
 
-stripNonexistantInteractions <- function(df) {
+StripNonexistantInteractions <- function(df) {
   # Manually create a column representing the two-way interaction between 
   # several terms, with infeasible interaction between levels removed
   # (eg. hrstrh23:priceon_peak or weekendYes:pricemid_peak).

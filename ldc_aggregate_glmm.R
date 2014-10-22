@@ -14,7 +14,7 @@ fpath <- file.path(home,
                    "../Dropbox/ISS4E/R/", 
                    "full_aggregate_readings.csv")
 readings.aggregate <- read.csv(fpath)
-readings.aggregate <- initAggregateReadings(readings.aggregate)
+readings.aggregate <- InitAggregateReadings(readings.aggregate)
 
 ##
 # Use 'segmented' package rather than my prior home-grown method of finding 
