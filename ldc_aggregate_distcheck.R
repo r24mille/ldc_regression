@@ -23,35 +23,45 @@ qqPlot(x = readings.aggregate$kwh,
        ylab = "Average Reading (kWh) for Aggregate")
 
 # Fit a reference Gamma distribution to the data
-gammafit <- fitdistr(readings.aggregate$kwh, "gamma")
-gfitshape <- gammafit$estimate[1]
-gfitrate <- gammafit$estimate[2]
+gamma.fit <- fitdistr(readings.aggregate$kwh, "gamma")
+gamma.shape <- gamma.fit$estimate[1]
+gamma.rate <- gamma.fit$estimate[2]
+
+# Fit a reference lognormal distribution to the data
+lognorm.fit <- fitdistr(readings.aggregate$kwh, "lognormal")
+lnorm.meanlog <- lognorm.fit$estimate[1]
+lnorm.sdlog <- lognorm.fit$estimate[2]
 
 # Provide a Q-Q Plot to do a visual check. CAR package has a lot of 
 # convenient defaults (eg. confidence intervals)
 qqPlot(x = readings.aggregate$kwh,
        distribution = "gamma",
-       shape = gfitshape,
-       rate = gfitrate,
+       shape = gamma.shape,
+       rate = gamma.rate,
        main = paste0("Q-Q Plot of Gamma Dist. vs. Readings (kWh)"),
        xlab = paste0("Gamma Distribution (shape=",
-                     round(gfitshape, 1),
+                     round(gamma.shape, 1),
                      ", rate=",
-                     round(gfitrate, 1),
+                     round(gamma.rate, 1),
                      ")"),
        ylab = "Average Reading (kWh) for Aggregate")
 
 # Generate a sample of random normal distribution
-rndmean <- round(mean(readings.aggregate$kwh), 1)
-rndsd <- round(sd(readings.aggregate$kwh), 1)
-nrand <- rnorm(n = length(readings.aggregate$kwh),
+mean.rounded <- round(mean(readings.aggregate$kwh), 1)
+sd.rounded <- round(sd(readings.aggregate$kwh), 1)
+rnorm.sample <- rnorm(n = length(readings.aggregate$kwh),
                mean = mean(readings.aggregate$kwh),
                sd = sd(readings.aggregate$kwh))
 
 # Generate a sample of random Gamma deviates
-grand <- rgamma(n = length(readings.aggregate$kwh),
-                shape = gfitshape,
-                rate = gfitrate)
+rgamma.sample <- rgamma(n = length(readings.aggregate$kwh),
+                shape = gamma.shape,
+                rate = gamma.rate)
+
+# Generate a sample of random log-normal deviates
+rlnorm.sample <- rlnorm(n = length(readings.aggregate$kwh),
+                       meanlog = lnorm.meanlog,
+                       sdlog = lnorm.sdlog)
 
 # Plot the probability density function of the real and Normal distribution
 par(mfrow=c(1,1))
@@ -67,21 +77,24 @@ plot(density(readings.aggregate$kwh, bw = kdbw),
                    ")"),
      main = "Density of Observations, Gaussian, and Gamma Distributions",
      col="red")
-lines(density(nrand, bw = kdbw), 
+lines(density(rnorm.sample, bw = kdbw), 
       col="blue")
-lines(density(grand, bw = kdbw), 
+lines(density(rgamma.sample, bw = kdbw), 
       col="green")
+lines(density(rlnorm.sample, bw = kdbw),
+      col="pink")
 legend("topright",
-       col = c("red", "blue", "green"), 
+       col = c("red", "blue", "green", "pink"), 
        lty = 1, 
        legend=c( "Observed Meter Readings", 
                  as.expression(bquote(paste("Gaussian Distribution (",
-                                            mu == .(rndmean),
+                                            mu == .(mean.rounded),
                                             ", ",
-                                            sigma^2 == .(rndsd),
+                                            sigma^2 == .(sd.rounded),
                                             ")     "))),
                  as.expression(bquote(paste("Gamma Distribution (",
-                                            alpha == .(round(gfitshape, 1)),
+                                            alpha == .(round(gamma.shape, 1)),
                                             ", ",
-                                            beta == .(round(gfitrate, 1)),
-                                            ")     ")))))
+                                            beta == .(round(gamma.rate, 1)),
+                                            ")     "))),
+                 "Log-Normal Distribution"))
