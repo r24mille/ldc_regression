@@ -1,3 +1,6 @@
+library(rgl) # OpenGL functionality in R for better 3D plots
+library(reshape) # Reshape data.frame for the heatmap
+
 PlotRegSubSets <- function (bics, adjr2s, title) {
   # Plot results from reg_subset in Bayesian Model Averaging (BMA) package.
   #
@@ -385,4 +388,63 @@ Plot2DFitByExplVarCountWithMultiplePastHrsTemp <- function(df.steps, is.bic,
          lty = lags.unique + 1,
          lwd = 2,
          col = seqcols[c(lags.unique + 1)])
+}
+
+Plot3DStepwiseResults <- function(df, title) {
+  # 3D wireframe plot of stepwise linear regression results.
+  #
+  # TODO(r24mille): Kind of dumping RGL and heatmap versions into this function
+  #                 for now. Clean these up some time in the future.
+  # 
+  # Args:
+  #   df: The stepwise regression results in the format of df.stepresults 
+  #       convention established elsewhere.
+  #   title: The plot title passed to main
+  wireframe(BIC ~ num.explvars * num.cdhlags, 
+            data = df,
+            xlab = list("Number of Explanatory Variables", 
+                        rot=-13), 
+            ylab = list("Number of Past Hours of Temp. > CDH_break Included", 
+                        rot=65),
+            zlab = list("Bayesian Information Criterion (BIC)", 
+                        rot=90), 
+            main = title,
+            drape = TRUE,
+            colorkey = TRUE,
+            scales = list(arrows = FALSE), # Switches unlabelled arrows to ticks
+            screen = list(z = -20, x = -60))
+  
+  # Decent setting for BIC
+  # screen = list(z = -20, x = -60)
+  
+  # That same information plotted with RGL
+  df.heat <- df
+  df.heat.reshape <- melt(data = df.heat,
+                          id.vars = c("num.cdhlags", "num.explvars"),
+                          measure.vars = c("BIC"))
+  cast.heat <- cast(data = df.heat.reshape, 
+                    formula = num.cdhlags ~ num.explvars)
+  stepresults.matrix <- as.matrix(cast.heat)
+  bic.lim <- range(df.stepresults.trimmed$BIC)
+  bic.len <- bic.lim[2] - bic.lim[1] + 1
+  hgt.lookup <- terrain.colors(bic.len) # height color lookup table
+  bic.colors <- hgt.lookup[stepresults.matrix - bic.lim[1] + 1] # assign colors to heights
+  persp3d(x = seq(0, (nrow(stepresults.matrix) - 1), len = nrow(stepresults.matrix)),
+          y = seq(1, ncol(stepresults.matrix), len = ncol(stepresults.matrix)),
+          z = stepresults.matrix, 
+          xlab = "Number of Past Hours Included",
+          ylab = "Number of Explanatory Variables",
+          zlab = "Bayesian Information Criterion (BIC)",
+          main = title,
+          col = bic.colors)
+  
+  # Heatmap
+  #maxbic <- max(df.stepresults.trimmed$BIC)
+  #stepresults.matrix[which(is.na(stepresults.matrix))] = maxbic;
+  heatmap(stepresults.matrix, 
+          Rowv=NA, 
+          Colv=NA, 
+          col = heat.colors(round(bic.len) * 2), 
+          margins=c(5,10),
+          na.rm = TRUE)
 }

@@ -3,89 +3,124 @@ library(MASS) # For correcting Gamma glm AIC
 source('goodness_fit_visualization.R')
 source('pseudo_rsquared.R')
 
-GammaAIC <- function(fit) {
-  # As per ?glm documentation, the default AIC value is wrong, "For gaussian,
-  # Gamma and inverse gaussian families the dispersion is estimated from the
-  # residual deviance, and the number of parameters is the number of
-  # coefficients plus one. For a gaussian family the MLE of the dispersion is
-  # used so this is a valid value of AIC, but for Gamma and inverse gaussian
-  # families it is not."
+BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
+                                             is.stopcriteria.bic = FALSE,
+                                             pval.threshold = 0.05) {
+  # Performs backward stepwise linear regression including the provided number 
+  # of hours of temperature history in its search space.
   #
-  # See supporting discussion at:
-  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
-  #
-  # This function is inspired by that StackOverflow discussion. The conventional definition for AIC is:
-  #
-  # AIC = 2k − 2log(L) 
-  # 
-  # Where k is number of parameters and L is likelihood.
+  # TODO(r24mille): Iteratively building a dataframe is frowned upon. Consider
+  #                 some other, more optimal method of building results.
   #
   # Args:
-  #   fit: A model fit by GLM, of family=Gamma()
+  #   nlags: The number of hours into the past that temperature > breakpoint 
+  #          information that can be incorporated into the model.
+  #   df.obs: The data.frame of observations to be used.
+  #   formula.maximal: The formula for the maximal model to be considered.
+  #   is.stopcriteria.bic: Controls the stopping criteria for the forward 
+  #                        stepwise explanatory variable exploration. If BIC 
+  #                        stopping criteria is used, then search stops when 
+  #                        BIC stops decreasing. Default value is FALSE and 
+  #                        p-value stopping criteria is used.
+  #   pval.threshold: Controls the p-value stopping criteria. A likelihood ratio
+  #                   test (LRT) is performed and the term is kept so long as 
+  #                   it's p-value is < 0.05 (default). Other thresholds 
+  #                   (eg. 0.01) may be passed in via this parameter.
   #
   # Return:
-  #   A more accurate AIC value for the fitted model.
+  #   A data.frame of results fitting the df.stepresults convention established 
+  #   elsewhere.
+  df.stepresults <- InitStepresultsDataframe()
+  glm.maximal <- glm(formula = formula.maximal, 
+                     data = df.obs, 
+                     family = gaussian)
   
-  # Dispersion is reciprocal of the estimate of the shape (eg. 1/shape) See
-  # MASS:::gamma.dispersion
-  # 
-  # gamma.shape is estimated through maximum likelihood after fitting a Gamma
-  # general linear model (ie. fit parameter). See ?MASS::gamma.shape
-  # 
-  # From documentation, "A glm fit for a Gamma family correctly calculates the
-  # maximum likelihood estimate of the mean parameters but provides only a crude
-  # estimate of the dispersion parameter. This function takes the results of the
-  # glm fit and solves the maximum likelihood equation for the reciprocal of the
-  # dispersion parameter, which is usually called the shape (or exponent) 
-  # parameter."
-  # 
-  # So this method is a more accurate value for dispersion than the default
-  # fit$deviance/length(fit$residuals).
-  disp <- MASS::gamma.dispersion(fit) 
-  # Rank is the number of parameters
-  k <- fit$rank
-  mu <- fit$fitted.values
-  y <- fit$y
-  return (2 * k - 2 * sum(dgamma(y, 1/disp, scale = mu * disp, log = TRUE)))
-}
+  # I know... iteratively building a data.frame is bad
+  glm.maximal.pwr <- IterativeGlmPower(glm.maximal)
+  explvars <- attr(glm.maximal$terms, "term.labels")
+  df.stepresults <- rbind(df.stepresults,
+                          data.frame(num.cdhlags = nlags,
+                                     num.explvars = length(explvars),
+                                     deviance.null = glm.maximal$null.deviance,
+                                     deviance.residuals = glm.maximal$deviance,
+                                     AICc = glm.maximal.pwr[1,2],
+                                     BIC = glm.maximal.pwr[1,3],
+                                     mcfadden.r2 = glm.maximal.pwr[1,4],
+                                     formulastr = Reduce(paste, 
+                                                         deparse(glm.maximal$formula,
+                                                                 width.cutoff = 500)),
+                                     variable.removed = "",
+                                     probability.gt.chi = 0))
+  
+  # Print status update
+  print(explvars)
+  
+  # Flag whether stepwise deletion of variables has completed
+  is.stepwise.complete = FALSE
+  while (is.stepwise.complete == FALSE) {
+    drop1.results <- drop1(object = glm.maximal,
+                           test = "LRT", 
+                           k = log(nrow(df.obs)))
 
-GammaAICc <- function(fit) {
-  # Corrected AICc which uses the more accurate GammaAIC(...) function to 
-  # computer the corrected AIC value. The equation for AICc is:
-  #
-  # AICc = AIC + (2k(k+1))/(n-k-1)
-  #
-  # Where k is the number of parameters and n denotes the sample size.
-  #
-  # See supporting discussion at:
-  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
-  # 
-  # Args: 
-  #   fit: A model fit by GLM, of family=Gamma()
-  # 
-  # Return: 
-  #   A more accurate AICc value that incorporates the more accurate
-  #   GammaAIC(...) function.
-  val <- logLik(fit)
-  k <- attributes(val)$df
-  n <- attributes(val)$nobs
-  return (GammaAIC(fit) + 2 * k * (k + 1) / (n - k - 1))
-}
-
-fixedGamma_extractAIC <- function(fit, scale=0, k=2, ...) {
-  # A function that can fix the AIC measure for glm(family=Gamma()) fitted models
-  # and does not break the AIC valu for other fitted models.
-  #
-  # Args:
-  #   fit: A model fit by GLM, of family=Gamma()
-  n <- length(fit$residuals)
-  edf <- n - fit$df.residual  
-  if (fit$family$family == "Gamma"){
-    aic <- GammaAIC(fit)
-  } else {
-    aic <- fit$aic
+    if (is.stopcriteria.bic == TRUE) {
+      # Sort according to p-value of LRT results
+      explvar.todrop <- rownames(drop1.results[ order(drop1.results[,3], 
+                                                      decreasing = TRUE), ][1,])
+      pr.gt.chi <- drop1.results[ order(drop1.results[,3], 
+                                        decreasing = TRUE), ][1,5]
+      
+      # If stepwise has reached the y-intercept, then no more model construction
+      # can be done.
+      if (explvar.todrop == "<none>") {
+        is.stepwise.complete = TRUE
+      }
+    } else {
+      # Sort according to p-value of LRT results
+      explvar.todrop <- rownames(drop1.results[ order(drop1.results[,5], 
+                                                      decreasing = TRUE), ][1,])
+      pr.gt.chi <- drop1.results[ order(drop1.results[,5], 
+                                        decreasing = TRUE), ][1,5]
+      
+      # If stepwise has reached the y-intercept, then no more model reduction can 
+      # be done (linear seperability issue). Stop and iterate to the next cdhlag.
+      if (explvar.todrop == "<none>") {
+        is.stepwise.complete = TRUE
+      } else if (pr.gt.chi < pval.threshold) { # Dropped term is significant, stop.
+        is.stepwise.complete = TRUE
+      }
+    }
+    
+    if (is.stepwise.complete == FALSE) {
+      # Remove least significant variable and update the GLM
+      glm.maximal <- update(glm.maximal, paste("~ . -", explvar.todrop))
+      
+      # Record results from simplified GLM
+      stepwise.glm.pwr <- IterativeGlmPower(glm.maximal)
+      explvars <- attr(glm.maximal$terms, "term.labels")
+      df.stepresults <- rbind(df.stepresults,
+                              data.frame(num.cdhlags = i,
+                                         num.explvars = length(explvars),
+                                         deviance.null = glm.maximal$null.deviance,
+                                         deviance.residuals = glm.maximal$deviance,
+                                         AICc = stepwise.glm.pwr[1,2],
+                                         BIC = stepwise.glm.pwr[1,3],
+                                         mcfadden.r2 = stepwise.glm.pwr[1,4],
+                                         formulastr = Reduce(paste, 
+                                                             deparse(glm.maximal$formula,
+                                                                     width.cutoff = 500)),
+                                         variable.removed = explvar.todrop,
+                                         probability.gt.chi = pr.gt.chi))
+      
+      # Print status update
+      if (length(explvars) == 0) {
+        is.stepwise.complete = TRUE
+      } else {
+        print(explvars)
+      }
+    }
   }
-  return(c(edf, aic + (k - 2) * edf))
+  
+  return (df.stepresults)
 }
 
 CdhLagMaximalFormula <- function(df.trimmed) {
@@ -194,54 +229,190 @@ CreateCdhLagMatrix <- function(nlags, readingsdf) {
   return(cdhlags)
 }
 
-MaximumTractableInteractionsGlmModel <- function(df.readings, nlags) {
-  # Certain two-way interactions can never interract all levels of each 
-  # categorical explanatory variable (eg. weekend="Yes":price="on_peak"). So, 
-  # the interacted term must be broken into its own column and then the 
-  # formula updated to reflect the fact that
+ForwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
+                                            is.stopcriteria.bic = FALSE,
+                                            pval.threshold = 0.05) {
+  # Performs forward stepwise linear regression including the provided number 
+  # of hours of temperature history in its search space.
+  #
+  # TODO(r24mille): Iteratively building a dataframe is frowned upon. Consider
+  #                 some other, more optimal method of building results.
   #
   # Args:
-  #   df.trimmed: A trimmed version of the readings.aggregate dataframe.
+  #   nlags: The number of hours into the past that temperature > breakpoint 
+  #          information that can be incorporated into the model.
+  #   df.obs: The data.frame of observations to be used.
+  #   formula.maximal: The formula for the maximal model to be considered.
+  #   is.stopcriteria.bic: Controls the stopping criteria for the forward 
+  #                        stepwise explanatory variable exploration. If BIC 
+  #                        stopping criteria is used, then search stops when 
+  #                        BIC stops decreasing. Default value is FALSE and 
+  #                        p-value stopping criteria is used.
+  #   pval.threshold: Controls the p-value stopping criteria. A likelihood ratio
+  #                   test (LRT) is performed and the term is kept so long as 
+  #                   it's p-value is < 0.05 (default). Other thresholds 
+  #                   (eg. 0.01) may be passed in via this parameter.
   #
-  # Returns:
-  #   A formula object, where each independent variable is modeled as a fixed 
-  #   effect with main effects and two-way interactions.
-  cdhlag <- CreateCdhLagMatrix(nlags, df.readings)
-  readings.with.cdh <- cbind(df.readings, cdhlag)
-  df.trimmed <- TrimColsTouTimeComponents(readings.with.cdh)
+  # Return:
+  #   A data.frame of results fitting the df.stepresults convention established 
+  #   elsewhere.
+  df.stepresults <- InitStepresultsDataframe()
   
-  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh")])
-  explvars.fmlastr <- paste(explvars, collapse = " + ")
-  maximal.fmlastr <- paste0("kwh ~ (", explvars.fmlastr, ")^2")
-  tractable.fmlastr <- maximal.fmlastr
+  # Use the y-intercept GLM as a starting point
+  stepwise.glm <- glm(formula = "(kwh) ~ 1", data = df.obs, family = gaussian)
   
-  # Create a column that represents only the feasible interactions of hrstr and
-  # price columns. Then remove the hrstr:price interaction from the formula
-  # string.
-  # TODO(r24mille): The predict(...) and other functions all seem to baulk 
-  #                 at the collinearity caused by the hrst:price term. Remove 
-  #                 it from the model for now unless a solution can be found.
-  tractable.fmlastr <- paste(tractable.fmlastr, 
-                            "- hrstr:price")
+  # I know... iteratively building a data.frame is bad  
+  is.stepwise.complete = FALSE
+  while (is.stepwise.complete == FALSE) {
+    add1.results <- add1(object = stepwise.glm,
+                         scope = formula.maximal,
+                         test = "LRT", 
+                         k = log(nrow(df.obs)))
+    
+    if (is.stopcriteria.bic == TRUE) {
+      # Sort according to BIC
+      explvar.toadd <- rownames(add1.results[ order(add1.results[,3],
+                                                    decreasing = FALSE), ][1,])
+      
+      pr.gt.chi <- add1.results[ order(add1.results[,3], 
+                                       decreasing = FALSE, 
+                                       na.last = NA), ][1,5]
+      
+      # If stepwise has reached the y-intercept, then no more model construction
+      # can be done.
+      if (explvar.toadd == "<none>") {
+          is.stepwise.complete = TRUE
+      }
+    } else {
+      # Sort according to p-value of LRT results
+      explvar.toadd <- rownames(add1.results[ order(add1.results[,5], 
+                                                         decreasing = FALSE,
+                                                         na.last = NA), ][1,])
+      pr.gt.chi <- add1.results[ order(add1.results[,5], 
+                                       decreasing = FALSE, 
+                                       na.last = NA), ][1,5]
+      
+      # If stepwise has reached the y-intercept, then no more model construction
+      # can be done.
+      if (explvar.toadd == "<none>") {
+        is.stepwise.complete = TRUE
+      } else if (pr.gt.chi > pval.threshold) { # Term added isn't significant
+        is.stepwise.complete = TRUE
+      } 
+    }
+    
+    if (is.stepwise.complete == FALSE) {
+      # Remove least significant variable and update the GLM
+      stepwise.glm <- update(stepwise.glm, 
+                             paste("~ . + ", explvar.toadd))
+      
+      # Record results from simplified GLM
+      stepwise.glm.pwr <- IterativeGlmPower(stepwise.glm)
+      explvars <- attr(stepwise.glm$terms, "term.labels")
+      df.stepresults <- rbind(df.stepresults,
+                              data.frame(num.cdhlags = nlags,
+                                         num.explvars = length(explvars),
+                                         deviance.null = stepwise.glm$null.deviance,
+                                         deviance.residuals = stepwise.glm$deviance,
+                                         AICc = stepwise.glm.pwr[1,2],
+                                         BIC = stepwise.glm.pwr[1,3],
+                                         mcfadden.r2 = stepwise.glm.pwr[1,4],
+                                         formulastr = Reduce(paste, 
+                                                             deparse(stepwise.glm$formula,
+                                                                     width.cutoff = 500)),
+                                         variable.added = explvar.toadd,
+                                         probability.gt.chi = pr.gt.chi))
+      
+      print(explvars)
+    }
+  }
   
-  # Create a column that represents only the feasible interaction of weekend and 
-  # price columns. Then remove the weekend:price interaction from the formula 
-  # string.
-  # 
-  # TODO(r24mille): Based on model simplification, weekend:price never becomes
-  #                 linearly seprable from the main effects of price.
-  #                   * Read on linear separability and what can lead to 
-  #                     singularities in GLM model fitting.
-  #
-  tractable.fmlastr <- paste(tractable.fmlastr, 
-                             "- weekend:price")
+  return(df.stepresults)
+}
 
+GammaAIC <- function(fit) {
+  # As per ?glm documentation, the default AIC value is wrong, "For gaussian,
+  # Gamma and inverse gaussian families the dispersion is estimated from the
+  # residual deviance, and the number of parameters is the number of
+  # coefficients plus one. For a gaussian family the MLE of the dispersion is
+  # used so this is a valid value of AIC, but for Gamma and inverse gaussian
+  # families it is not."
+  #
+  # See supporting discussion at:
+  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
+  #
+  # This function is inspired by that StackOverflow discussion. The conventional definition for AIC is:
+  #
+  # AIC = 2k − 2log(L) 
+  # 
+  # Where k is number of parameters and L is likelihood.
+  #
+  # Args:
+  #   fit: A model fit by GLM, of family=Gamma()
+  #
+  # Return:
+  #   A more accurate AIC value for the fitted model.
   
-  # Fit the GLM model
-  tractable.glm <- glm(formula = formula(tractable.fmlastr), 
-                  data = df.trimmed, 
-                  family = Gamma(link="log"))
-  return(tractable.glm)
+  # Dispersion is reciprocal of the estimate of the shape (eg. 1/shape) See
+  # MASS:::gamma.dispersion
+  # 
+  # gamma.shape is estimated through maximum likelihood after fitting a Gamma
+  # general linear model (ie. fit parameter). See ?MASS::gamma.shape
+  # 
+  # From documentation, "A glm fit for a Gamma family correctly calculates the
+  # maximum likelihood estimate of the mean parameters but provides only a crude
+  # estimate of the dispersion parameter. This function takes the results of the
+  # glm fit and solves the maximum likelihood equation for the reciprocal of the
+  # dispersion parameter, which is usually called the shape (or exponent) 
+  # parameter."
+  # 
+  # So this method is a more accurate value for dispersion than the default
+  # fit$deviance/length(fit$residuals).
+  disp <- MASS::gamma.dispersion(fit) 
+  # Rank is the number of parameters
+  k <- fit$rank
+  mu <- fit$fitted.values
+  y <- fit$y
+  return (2 * k - 2 * sum(dgamma(y, 1/disp, scale = mu * disp, log = TRUE)))
+}
+
+GammaAICc <- function(fit) {
+  # Corrected AICc which uses the more accurate GammaAIC(...) function to 
+  # computer the corrected AIC value. The equation for AICc is:
+  #
+  # AICc = AIC + (2k(k+1))/(n-k-1)
+  #
+  # Where k is the number of parameters and n denotes the sample size.
+  #
+  # See supporting discussion at:
+  # https://stackoverflow.com/questions/13405109/how-can-i-do-model-selection-by-aic-with-a-gamma-glm-in-r
+  # 
+  # Args: 
+  #   fit: A model fit by GLM, of family=Gamma()
+  # 
+  # Return: 
+  #   A more accurate AICc value that incorporates the more accurate
+  #   GammaAIC(...) function.
+  val <- logLik(fit)
+  k <- attributes(val)$df
+  n <- attributes(val)$nobs
+  return (GammaAIC(fit) + 2 * k * (k + 1) / (n - k - 1))
+}
+
+fixedGamma_extractAIC <- function(fit, scale=0, k=2, ...) {
+  # A function that can fix the AIC measure for glm(family=Gamma()) fitted models
+  # and does not break the AIC valu for other fitted models.
+  #
+  # Args:
+  #   fit: A model fit by GLM, of family=Gamma()
+  n <- length(fit$residuals)
+  edf <- n - fit$df.residual  
+  if (fit$family$family == "Gamma"){
+    aic <- GammaAIC(fit)
+  } else {
+    aic <- fit$aic
+  }
+  return(c(edf, aic + (k - 2) * edf))
 }
 
 GlmPowerResultsMatrix <- function(nlags) {
@@ -263,6 +434,27 @@ GlmPowerResultsMatrix <- function(nlags) {
                                         "BIC",
                                         "McFaddenPseudoR2")))
   return(resmatrix)
+}
+
+InitStepresultsDataframe <- function() {
+  # Initializes an empty dataframe to store stepwise linear regression results 
+  # in a common format.
+  #
+  # Return:
+  #   An empty dataframe with columns structured appropriately for my iterative
+  #   stepwise linear regression results.
+  df.stepresults <- data.frame(num.cdhlags = numeric(),
+                               num.explvars = numeric(),
+                               deviance.null = numeric(),
+                               deviance.residuals = numeric(),
+                               AICc = numeric(),
+                               BIC = numeric(),
+                               mcfadden.r2 = numeric(),
+                               formulastr = character(),
+                               variable.added = character(),
+                               probability.gt.chi = numeric())
+  
+  return(df.stepresults)
 }
 
 IterativeGlmModel <- function(df.readings, nlags, 
