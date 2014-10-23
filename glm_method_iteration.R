@@ -1,5 +1,6 @@
 library(MASS) # For correcting Gamma glm AIC
 
+source('dataframe_processing.R')
 source('goodness_fit_visualization.R')
 source('pseudo_rsquared.R')
 
@@ -39,7 +40,7 @@ BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
   glm.maximal.pwr <- IterativeGlmPower(glm.maximal)
   explvars <- attr(glm.maximal$terms, "term.labels")
   df.stepresults <- rbind(df.stepresults,
-                          data.frame(num.cdhlags = nlags,
+                          data.frame(num.lags = nlags,
                                      num.explvars = length(explvars),
                                      deviance.null = glm.maximal$null.deviance,
                                      deviance.residuals = glm.maximal$deviance,
@@ -61,7 +62,7 @@ BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
     drop1.results <- drop1(object = glm.maximal,
                            test = "LRT", 
                            k = log(nrow(df.obs)))
-
+    
     if (is.stopcriteria.bic == TRUE) {
       # Sort according to p-value of LRT results
       explvar.todrop <- rownames(drop1.results[ order(drop1.results[,3], 
@@ -82,7 +83,7 @@ BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
                                         decreasing = TRUE), ][1,5]
       
       # If stepwise has reached the y-intercept, then no more model reduction can 
-      # be done (linear seperability issue). Stop and iterate to the next cdhlag.
+      # be done (linear seperability issue), stop.
       if (explvar.todrop == "<none>") {
         is.stepwise.complete = TRUE
       } else if (pr.gt.chi < pval.threshold) { # Dropped term is significant, stop.
@@ -98,7 +99,7 @@ BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
       stepwise.glm.pwr <- IterativeGlmPower(glm.maximal)
       explvars <- attr(glm.maximal$terms, "term.labels")
       df.stepresults <- rbind(df.stepresults,
-                              data.frame(num.cdhlags = i,
+                              data.frame(num.lags = i,
                                          num.explvars = length(explvars),
                                          deviance.null = glm.maximal$null.deviance,
                                          deviance.residuals = glm.maximal$deviance,
@@ -123,110 +124,128 @@ BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
   return (df.stepresults)
 }
 
-CdhLagMaximalFormula <- function(df.trimmed) {
-  # This function returns the forumla for all main effects and two-way 
-  # interactions of the columns in the trimmed dataframe provided.
-  #
-  # Args:
-  #   trimmed.df: A trimmed version of the readings.aggregate dataframe.
-  #
-  # Returns:
-  #   A formula object, where each independent variable is modeled as a fixed 
-  #   effect with main effects and two-way interactions.
+CdhSumMaximalExplVars <- function(df.trimmed) {
+  # This function returns the explanatory variable portion of a formula for all 
+  # main effects and two-way interactions of the columns in a trimmed dataframe.
+  # 
+  # Args: 
+  #   trimmed.df: A trimmed version of the meter readings dataframe.
+  # 
+  # Returns: 
+  #   A string to be used in the explanatory variable portion of a formula which
+  #   structures main effects and two-way interactions of every explanatory
+  #   variable.
   explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh")]) 
-  explvars.fmlastr <- paste(explvars, collapse = " + ")
-  maximal.fmlastr <- paste0("kwh ~ (", explvars.fmlastr, ")^2")
-  return(formula(maximal.fmlastr))
+  explvars.collapsed <- paste(explvars, collapse = " + ")
+  explvars.str <- paste0("(", explvars.collapsed, ")^2")
+  return(explvars.str)
 }
 
-CdhLagMaximalNestedFormula <- function(df.trimmed, cdhlagmat.colnames) {
-  # Each CDH lag into the past may be provided as its own column in the 
-  # dataframe and modelled as nested fixed effects and two-way interractions 
-  # between all fixed effects.
+TempLagMaximalExplVars <- function(df.trimmed) {
+  # This function returns the explanatory variable portion of a formula for all 
+  # main effects and two-way interactions of the columns in a trimmed dataframe.
+  # 
+  # Args: 
+  #   trimmed.df: A trimmed version of the meter readings dataframe.
+  # 
+  # Returns: 
+  #   A string to be used in the explanatory variable portion of a formula which
+  #   structures main effects and two-way interactions of every explanatory
+  #   variable. Certain two-way interactions are removed and are replaced by 
+  #   columns which represent the two-way interaction. (See function 
+  #   StripNonexistantInteractions.)
+  explvars <- colnames(df.trimmed[, ! colnames(df.trimmed) %in% c("kwh",
+                                                                  "hrstr_price",
+                                                                  "wknd_price")]) 
+  explvars.collapsed <- paste(explvars, collapse = " + ")
+  explvars.str <- paste0("(", explvars.collapsed, ")^2 - hrstr:price + hrstr_price - weekend:price + wknd_price")
+  return(explvars.str)
+}
+
+TempLagNestedExplVars <- function(df.trimmed, templag.colnames) {
+  # This function returns the explanatory variable portion of a formula for all
+  # main effects of all dataframe columns, two-way interactions between 
+  # categorical variables, and nested interactions of past hours' temperature >
+  # breakpoint.
   #
   # Args:
-  #   df.trimmed: A smart meter readings dataframe with CDH lags of previous
-  #               hours are each a column of 
-  #               data (eg. "lag0", "lag1", ..., "lagn").
-  #   cdhlagmat.colnames: The ordered column names of previous hours' degrees 
-  #                       over the CDH breakpoint.
+  #   df.trimmed: A trimmed version of the meter readings dataframe.
+  #   templag.colnames: The ordered column names of previous hours' degrees over
+  #                     the temperature breakpoint.
   # 
   # Returns:
-  #   A formula object, where the lagged obervation terms are nested, and 
-  #   two-way interracted with other main effects.
+  #   A string to be used in the explanatory variable portion of a formula which
+  #   structures main effects of all terms, two-way interactions of categorical 
+  #   terms, and nested interactions of past hours' temperature > breakpoint.
   allcolnames <- colnames(df.trimmed)
-  noncdh.colnames <- allcolnames[! allcolnames %in% c(cdhlagmat.colnames, 
-                                               "kwh")]
-  noncdh.fmlastr <- paste(noncdh.colnames,
-                          collapse = " + ")
-  nestedcdhlag.fmlastr <- paste(cdhlagmat.colnames,
-                                collapse = "/")
-  maximal.fmlastr <- paste0("kwh ~ (",
-                            noncdh.fmlastr,
-                            " + ",
-                            nestedcdhlag.fmlastr,  
-                            ")^2")
-  return(formula(maximal.fmlastr))
+  nontemp.colnames <- allcolnames[! allcolnames %in% c(templag.colnames, 
+                                                       "kwh",
+                                                       "hrstr_price",
+                                                       "wknd_price")]
+  main.str <- paste(c(nontemp.colnames, templag.colnames), collapse = " + ")
+  nested.str <- paste(templag.colnames, collapse = "/")
+  explvars.str <- paste0("(", main.str, ")^2 + ", nested.str)
+  return(explvars.str)
 }
 
-CreateCdhLagSum <- function(nlags, readingsdf) {
+CreateCdhSum <- function(nlags, df.readings) {
   # For each observation, this function sums all temperature values above the
-  # CDH breakpoint from the current time through a number of hours into the past
-  # (nlags).
+  # CDH breakpoint from the current time through a number of hours into the 
+  # past.
   # 
   # Args:
   #   nlags: The number of hours into the past (ie. lags) to sum for each 
   #          observation.
-  #   readingsdf: A dataframe of smart meter readings.
+  #   df.readings: A dataframe of smart meter readings.
   #
   # Returns:
-  #   A vector of values based on the "conventional" definition of CDH.  
-  cdhlag <- rep(0, nrow(readingsdf)) # Prealloate cdhlag vector
+  #   A vector of values based on the conventional definition of CDH.  
+  cdhvals <- rep(0, nrow(df.readings)) # Preallocate CDH vector
   
   # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(readingsdf)) {
-    cdhlag[i] <- readingsdf[i, "cdh"]
-    tmplg <- 1
+  for(i in 1:nrow(df.readings)) {
+    cdhvals[i] <- df.readings[i, "temp_over_break"]
+    step <- 1
     
     # Sum what we can or all the values up to nlags
-    while (i-tmplg > 0 & tmplg <= nlags) {
-      cdhlag[i] <- cdhlag[i] + readingsdf[i-tmplg, "cdh"]
-      tmplg <- tmplg + 1
+    while (i-step > 0 & step <= nlags) {
+      cdhvals[i] <- cdhvals[i] + df.readings[i-step, "temp_over_break"]
+      step <- step + 1
     }
   }
   
-  return(cdhlag)
+  return(cdhvals)
 }
 
 
-CreateCdhLagMatrix <- function(nlags, readingsdf) {
+CreatePastTemperatureMatrix <- function(nlags, df.readings) {
   # Creates a matrix of values such that each column looks an additional hour 
-  # into the past.
+  # into the past at degrees over the temperature breakpoint.
   #
   # Args:
   #   nlags: The number of hours (ie. lags) to include in the matrix
-  #   readingsdf: A dataframe of smart meter readings.
+  #   df.readings: A dataframe of smart meter readings.
   #
   # Returns:
   #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
   #   own coefficient when modelled.
-  lagnames <- paste0("lag", c(0:nlags))
-  cdhlags <- matrix(nrow = nrow(readingsdf),
-                    ncol = (nlags + 1))
-  colnames(cdhlags) <- lagnames
+  lagnames <- paste0("templag", c(0:nlags))
+  templags <- matrix(nrow = nrow(df.readings),
+                     ncol = (nlags + 1))
+  colnames(templags) <- lagnames
   
   # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(readingsdf)) {
+  for(i in 1:nrow(df.readings)) {
     for(j in 0:nlags) {
       if (i-j > 0) {
-        cdhlags[i, (j+1)] <- readingsdf[i-j, "cdh"]
+        templags[i, (j+1)] <- df.readings[i-j, "temp_over_break"]
       } else {
-        cdhlags[i, (j+1)] <- 0
+        templags[i, (j+1)] <- 0
       }
     }
   }
   
-  return(cdhlags)
+  return(templags)
 }
 
 ForwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
@@ -281,13 +300,13 @@ ForwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
       # If stepwise has reached the y-intercept, then no more model construction
       # can be done.
       if (explvar.toadd == "<none>") {
-          is.stepwise.complete = TRUE
+        is.stepwise.complete = TRUE
       }
     } else {
       # Sort according to p-value of LRT results
       explvar.toadd <- rownames(add1.results[ order(add1.results[,5], 
-                                                         decreasing = FALSE,
-                                                         na.last = NA), ][1,])
+                                                    decreasing = FALSE,
+                                                    na.last = NA), ][1,])
       pr.gt.chi <- add1.results[ order(add1.results[,5], 
                                        decreasing = FALSE, 
                                        na.last = NA), ][1,5]
@@ -310,7 +329,7 @@ ForwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
       stepwise.glm.pwr <- IterativeGlmPower(stepwise.glm)
       explvars <- attr(stepwise.glm$terms, "term.labels")
       df.stepresults <- rbind(df.stepresults,
-                              data.frame(num.cdhlags = nlags,
+                              data.frame(num.lags = nlags,
                                          num.explvars = length(explvars),
                                          deviance.null = stepwise.glm$null.deviance,
                                          deviance.residuals = stepwise.glm$deviance,
@@ -443,7 +462,7 @@ InitStepresultsDataframe <- function() {
   # Return:
   #   An empty dataframe with columns structured appropriately for my iterative
   #   stepwise linear regression results.
-  df.stepresults <- data.frame(num.cdhlags = numeric(),
+  df.stepresults <- data.frame(num.lags = numeric(),
                                num.explvars = numeric(),
                                deviance.null = numeric(),
                                deviance.residuals = numeric(),
@@ -458,7 +477,7 @@ InitStepresultsDataframe <- function() {
 }
 
 IterativeGlmModel <- function(df.readings, nlags, 
-                              is.touperiod, is.cdhlagsum, is.maxformula) {
+                              is.touperiod, is.cdhsum, is.maximal) {
   # Time-of-Use (TOU) can be represented as a categorical explanatory variable 
   # or its component parts can each be modelled as explanatory variables. 
   # Additionally, cooling degree-hours(CDH) can be modelled using the
@@ -473,45 +492,49 @@ IterativeGlmModel <- function(df.readings, nlags,
   #   is.touperiod: A boolean indicating whether the categorical tou_period
   #                 explanatory variable is used. If FALSE, then components of 
   #                 TOU will be used.
-  #   is.cdhlagsum: A boolean indicating whether the CDH should be summed a 
-  #                 number of hours into the past. If FALSE, then each 
-  #                 historical cdh values will be represented as their own 
-  #                 explanatory variables.
-  #   is.maxformula: A boolean indicating whether a maximal two-way interaction 
-  #                  formula should be used. If FALSE, then a nested formula 
-  #                  (ie. the nested CDH lag experiment) will be created.
+  #   is.cdhsum: A boolean indicating whether the CDH should be summed a number
+  #              of hours into the past. If FALSE, then each historical 
+  #              temperature > breakpoint value will be represented as its own 
+  #              term.
+  #   is.maximal: A boolean indicating whether a maximal two-way interaction 
+  #               formula should be used. If FALSE, then a nested formula (ie. 
+  #               past temperature nested interraction experiment) will be 
+  #               created.
   #
   # Returns:
   #   A glm fitted according to the provided criteria.
   
   # CDH structure created (ie. vector or matrix)
-  if(is.cdhlagsum == TRUE) {
-    cdhlag <- CreateCdhLagSum(nlags, df.readings)
+  if(is.cdhsum == TRUE) {
+    cdhsum <- CreateCdhSum(nlags, df.readings)
+    readings.with.temp <- cbind(df.readings, cdhsum)
   } else {
-    cdhlag <- CreateCdhLagMatrix(nlags, df.readings)
+    past_temps <- CreatePastTemperatureMatrix(nlags, df.readings)
+    readings.with.temp <- cbind(df.readings, past_temps)
   }
-  
-  # Stitch the two data structures together into a dataframe.
-  readings.with.cdh <- cbind(df.readings, cdhlag)
   
   # Trim dataframe columns appropriate for desired representation of TOU
   if(is.touperiod == TRUE) {
-    df.trimmed <- TrimColsTouPeriods(readings.with.cdh)
+    df.trimmed <- TrimColsTouPeriods(readings.with.temp)
   } else {
-    df.trimmed <- TrimColsTouTimeComponents(readings.with.cdh)
+    df.trimmed <- TrimColsTouTimeComponents(readings.with.temp)
   }
   
   # Create appropriate GLM formula
-  if (is.maxformula == TRUE) {
-    fmla <- CdhLagMaximalFormula(df.trimmed)
+  if (is.maximal == TRUE & is.touperiod == TRUE) {
+    explvars.str <- CdhSumMaximalExplVars(df.trimmed)
+  } else if (is.maximal == TRUE & is.touperiod == FALSE) {
+    explvars.str <- TempLagMaximalExplVars(df.trimmed)
   } else {
-    fmla <- CdhLagMaximalNestedFormula(df.trimmed, colnames(cdhlag))
+    explvars.str <- TempLagNestedExplVars(df.trimmed, colnames(past_temps))
   }
   
   # Fit the GLM model
+  fmla <- formula(paste0("log(kwh) ~ ", explvars.str))
+  print(fmla)
   iter.glm <- glm(formula = fmla, 
                   data = df.trimmed, 
-                  family = Gamma(link="log"))
+                  family = gaussian)
   return(iter.glm)
 }
 
@@ -595,100 +618,96 @@ PerformTouCdhGlmIterations <- function(df.readings, nhrs) {
   #   df.readings: A readings dataframe to be passed as the "data" parameter 
   #                to the GLMs.
   #   nhrs: Number of hours to include in the CDH component of the model
-  cdhlagsum.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
-  cdhlagmat.touperiods.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
-  cdhlagmat.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
-  cdhlagsum.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
-  cdhlagmat.toucomps.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
-  cdhlagmat.toucomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhsum.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  tempterms.touperiods.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  tempterms.touperiods.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  cdhsum.timecomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  tempterms.timecomps.nestedglm.pwr <- GlmPowerResultsMatrix(nhrs)
+  tempterms.timecomps.maxglm.pwr <- GlmPowerResultsMatrix(nhrs)
   
   for(i in 0:nhrs) {
     # 1. Summed CDH lags, TOU as periods
-    cdhlagsum.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                     nlags = i, 
-                                                     is.touperiod = TRUE, 
-                                                     is.cdhlagsum = TRUE, 
-                                                     is.maxformula = TRUE)
-    cdhlagsum.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagsum.touperiods.maxglm)
+    cdhsum.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                  nlags = i, 
+                                                  is.touperiod = TRUE, 
+                                                  is.cdhsum = TRUE, 
+                                                  is.maximal = TRUE)
+    cdhsum.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhsum.touperiods.maxglm)
     
     # 2. Matrix of CDH lags as nested interactions, TOU as periods
-    cdhlagmat.touperiods.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
+    tempterms.touperiods.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
                                                         nlags = i, 
                                                         is.touperiod = TRUE, 
-                                                        is.cdhlagsum = FALSE, 
-                                                        is.maxformula = FALSE)
-    cdhlagmat.touperiods.nestedglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.touperiods.nestedglm)
+                                                        is.cdhsum = FALSE, 
+                                                        is.maximal = FALSE)
+    tempterms.touperiods.nestedglm.pwr[(i+1),] <- IterativeGlmPower(tempterms.touperiods.nestedglm)
     
     # 3. Matrix of CDH lags as two-way interactions, TOU as periods
-    cdhlagmat.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+    tempterms.touperiods.maxglm <- IterativeGlmModel(df.readings = df.readings, 
                                                      nlags = i, 
                                                      is.touperiod = TRUE, 
-                                                     is.cdhlagsum = FALSE, 
-                                                     is.maxformula = TRUE)
-    cdhlagmat.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.touperiods.maxglm)
+                                                     is.cdhsum = FALSE, 
+                                                     is.maximal = TRUE)
+    tempterms.touperiods.maxglm.pwr[(i+1),] <- IterativeGlmPower(tempterms.touperiods.maxglm)
     
     # 4. Summed CDH lags, TOU components of time
-    cdhlagsum.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                   nlags = i, 
-                                                   is.touperiod = FALSE, 
-                                                   is.cdhlagsum = TRUE, 
-                                                   is.maxformula = TRUE)
-    cdhlagsum.toucomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagsum.toucomps.maxglm)
+    cdhsum.timecomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                 nlags = i, 
+                                                 is.touperiod = FALSE, 
+                                                 is.cdhsum = TRUE, 
+                                                 is.maximal = TRUE)
+    cdhsum.timecomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhsum.timecomps.maxglm)
     
     # 5. Matrix of CDH lags as nested interactions, TOU components of time
-    cdhlagmat.toucomps.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                      nlags = i, 
-                                                      is.touperiod = FALSE, 
-                                                      is.cdhlagsum = FALSE, 
-                                                      is.maxformula = FALSE)
-    cdhlagmat.toucomps.nestedglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.toucomps.nestedglm)
+    tempterms.timecomps.nestedglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                       nlags = i, 
+                                                       is.touperiod = FALSE, 
+                                                       is.cdhsum = FALSE, 
+                                                       is.maximal = FALSE)
+    tempterms.timecomps.nestedglm.pwr[(i+1),] <- IterativeGlmPower(tempterms.timecomps.nestedglm)
     
     # 6. Matrix of CDH lags as two-way interactions, TOU components of time
-    cdhlagmat.toucomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
-                                                   nlags = i, 
-                                                   is.touperiod = FALSE, 
-                                                   is.cdhlagsum = FALSE, 
-                                                   is.maxformula = TRUE)
-    cdhlagmat.toucomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(cdhlagmat.toucomps.maxglm)
+    tempterms.timecomps.maxglm <- IterativeGlmModel(df.readings = df.readings, 
+                                                    nlags = i, 
+                                                    is.touperiod = FALSE, 
+                                                    is.cdhsum = FALSE, 
+                                                    is.maximal = TRUE)
+    tempterms.timecomps.maxglm.pwr[(i+1),] <- IterativeGlmPower(tempterms.timecomps.maxglm)
   }
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagsum.touperiods.maxglm.pwr, 
-                    maintitle = expression(paste("TOU Period, Degrees>", 
-                                                 CDH['break'], 
-                                                 " Summed")))
+  IterativeGlmPlots(iter.glm.pwr = cdhsum.touperiods.maxglm.pwr, 
+                    maintitle = "TOU Period, Cooling Degree Hours")
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.touperiods.nestedglm.pwr, 
-                    maintitle = expression(paste("TOU Period, Degrees>", 
-                                                 CDH['break'], 
-                                                 " as Coefficients w/ Nested Interaction")))
+  IterativeGlmPlots(iter.glm.pwr = tempterms.touperiods.nestedglm.pwr, 
+                    maintitle = expression(paste("TOU Period, with Degrees>", 
+                                                 Temp['break'], 
+                                                 " Nested Interaction")))
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.touperiods.maxglm.pwr, 
-                    maintitle = expression(paste("TOU Period, Degrees>", 
-                                                 CDH['break'], 
-                                                 " as Coefficients w/ All 2-Way Interactions")))
+  IterativeGlmPlots(iter.glm.pwr = tempterms.touperiods.maxglm.pwr, 
+                    maintitle = expression(paste("TOU Period, with Degrees>", 
+                                                 Temp['break'], 
+                                                 " and All 2-Way Interactions")))
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagsum.toucomps.maxglm.pwr, 
-                    maintitle = expression(paste("TOU Components, Degrees>", 
-                                                 CDH['break'], 
-                                                 " Summed")))
+  IterativeGlmPlots(iter.glm.pwr = cdhsum.timecomps.maxglm.pwr, 
+                    maintitle = "Time Components, Cooling Degree Hours")
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.toucomps.nestedglm.pwr, 
-                    maintitle = expression(paste("TOU Components, Degrees>", 
-                                                 CDH['break'], 
-                                                 " as Coefficients w/ Nested Interaction")))
+  IterativeGlmPlots(iter.glm.pwr = tempterms.timecomps.nestedglm.pwr, 
+                    maintitle = expression(paste("Time Components, with Degrees>", 
+                                                 Temp['break'], 
+                                                 " Nested Interaction")))
   
-  IterativeGlmPlots(iter.glm.pwr = cdhlagmat.toucomps.maxglm.pwr, 
-                    maintitle = expression(paste("TOU Components, Degrees>", 
-                                                 CDH['break'], 
-                                                 " as Coefficients w/ All 2-Way Interactions")))
+  IterativeGlmPlots(iter.glm.pwr = tempterms.timecomps.maxglm.pwr, 
+                    maintitle = expression(paste("Time Components, with Degrees>", 
+                                                 Temp['break'], 
+                                                 " and All 2-Way Interactions")))
 }
 
-TrimColsTouPeriods <- function(readingsdf) {
+TrimColsTouPeriods <- function(df.readings) {
   # Trim the columns down from full readings.aggregate to only those needed 
   # when working with "TOU Period" version of the model.
   #
   # Args:
-  #   readingsdf: A dataframe object of aggregate readings
+  #   df.readings: A dataframe object of aggregate readings
   #
   # Returns:
   #   A trimmed dataframe in which unneeded columns from readings.aggregate 
@@ -696,37 +715,40 @@ TrimColsTouPeriods <- function(readingsdf) {
   #   representing TOU via its periods (ie. tou_period) are preserved. 
   #   Ontario's TOU periods are essentially a proxy for day, time, demand, and 
   #   price.  
-  periodsdf <- readingsdf[, ! colnames(readingsdf) %in% c("daynum", 
-                                                          "hour", 
-                                                          "timestamp_dst", 
-                                                          "temperature", 
-                                                          "agg_count", 
-                                                          "hrstr", 
-                                                          "weekend", 
-                                                          "price", 
-                                                          "cdh")]
-  return(periodsdf)
+  df.periods <- df.readings[, ! colnames(df.readings) %in% c("daynum", 
+                                                             "hour", 
+                                                             "timestamp_dst", 
+                                                             "temperature", 
+                                                             "agg_count", 
+                                                             "hrstr", 
+                                                             "weekend", 
+                                                             "price", 
+                                                             "temp_over_break",
+                                                             "hrstr_price",
+                                                             "wknd_price")]
+  return(df.periods)
 }
 
 
-TrimColsTouTimeComponents <- function(readingsdf) {
+TrimColsTouTimeComponents <- function(df.readings) {
   # Trim the columns down from full readings.aggregate to only those needed 
   # when working with "Components of TOU" version of the model.
   #
   # Args:
-  #   readingdf: A dataframe object of aggregate readings
+  #   df.readings: A dataframe object of aggregate readings
   #
   # Returns:
   #   A trimmed dataframe in which unneeded columns from readings.aggregate 
   #   dataframe have been trimmed out. Only columns with data relevant to 
   #   representing TOU via all of its components (ie. hour-of-day, 
   #   weekday/weekend, and price) are preserved.
-  timecompdf <- readingsdf[, ! colnames(readingsdf) %in% c("daynum", 
-                                                           "hour", 
-                                                           "timestamp_dst", 
-                                                           "temperature", 
-                                                           "agg_count", 
-                                                           "tou_period", 
-                                                           "cdh")]
-  return(timecompdf)
+  df.timecomps <- df.readings[, ! colnames(df.readings) %in% c("daynum", 
+                                                              "hour", 
+                                                              "timestamp_dst", 
+                                                              "temperature", 
+                                                              "agg_count", 
+                                                              "tou_period", 
+                                                              "temp_over_break",
+                                                              "billing_active")]
+  return(df.timecomps)
 }

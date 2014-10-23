@@ -21,28 +21,27 @@ readings.aggregate <- InitAggregateReadings(readings.aggregate)
 # the optimal cooling degree hour breakpoint (though they give the same 
 # result).
 #
-# TODO(r24mille): segmented chooses very different cdhbreak numbers based on 
-#                 the model chosen. Maybe just making an empirical choice for 
-#                 CDH break within the context of the final model is the best 
-#                 choice.
+# TODO(r24mille): segmented chooses very different temperature.break numbers 
+#                 based on the model chosen. Maybe just making an empirical 
+#                 choice for CDH break within the context of the final model is 
+#                 the best choice.
 model.readings.glm.presegment <- glm(log(kwh)~(month+hrstr+weekend+price+temperature)^2 - hrstr:price - weekend:price,
                                      data = readings.aggregate,
                                      family = gaussian)
 seg <- segmented(obj = model.readings.glm.presegment, 
                  seg.Z = ~ temperature,
                  psi = list(temperature = c(18)))
-cdhbreak <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
-readings.aggregate$cdh <- ifelse(readings.aggregate$temperature > cdhbreak, 
-                                 readings.aggregate$temperature - cdhbreak, 
-                                 0)
+temperature.break <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
+readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
+                                             readings.aggregate$temperature - temperature.break, 
+                                             0)
 
 ##
 # Find the optimal number of hours lag, and the best method for incorporating 
 # CDH. Is it best to sum up current and past hours, similar to traditional CDH 
 # or should previous hours be nested under the current hour?
 # (Commenting out the iterative comparison for now)
-#PerformTouCdhGlmIterations(df.readings = readings.aggregate,
-#                           nhrs = 5)
+#PerformTouCdhGlmIterations(df.readings = readings.aggregate, nhrs = 5)
 
 
 # Iterate backward stepwise linear regression through all combinations of 
