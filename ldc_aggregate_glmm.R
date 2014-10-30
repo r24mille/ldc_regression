@@ -129,11 +129,12 @@ FormulaStringNoInterTemperatureInteractions <- function(df.readings,
 frmla.notempintr.str <- FormulaStringNoInterTemperatureInteractions(df.readings = readings.trimmed,
                                                                     matrix.temps = temps)
 
-library(BMA)
-readings.bma <- bic.glm(data = readings.trimmed,
-                        f = formula(frmla.notempintr.str),
-                        glm.family = gaussian,
-                        nbest = 50)
+#readings.aggregate <- cbind(readings.aggregate, temps)
+#readings.trimmed <- TrimColsTouTimeComponents(readings.aggregate)
+readings.trimmed <- cbind(readings.trimmed, temps)
+#explvar.str <- TempLagMaximalExplVars(readings.trimmed)
+#formula.maximal <- formula(paste0("log(kwh) ~ ", explvar.str))
+formula.notempintr <- formula(frmla.notempintr.str)
 
 # LEAPs
 #xmatrix <- as.matrix(readings.trimmed[,-1])
@@ -142,14 +143,15 @@ readings.bma <- bic.glm(data = readings.trimmed,
 #                                    depvar.matrix))
 #readings.bestglm <- bestglm(Xy = designmatrix)
 
+# BMA
+library(BMA)
+readings.bma <- bic.glm(f = frmla.notempintr,
+                        data = readings.trimmed,
+                        glm.family = gaussian,
+                        nbest = 50)
+
 # Use LASSO for better selection of explanatory variables
 # transform dataframe to matrices as required by glmnet
-#readings.aggregate <- cbind(readings.aggregate, temps)
-#readings.trimmed <- TrimColsTouTimeComponents(readings.aggregate)
-readings.trimmed <- cbind(readings.trimmed, temps)
-#explvar.str <- TempLagMaximalExplVars(readings.trimmed)
-#formula.maximal <- formula(paste0("log(kwh) ~ ", explvar.str))
-formula.notempintr <- formula(frmla.notempintr.str)
 #explvar.matrix <- model.matrix(formula.maximal, readings.trimmed)
 explvar.matrix <- model.matrix(formula.notempintr, readings.trimmed)
 depvar.matrix <- as.matrix(log(readings.trimmed$kwh), ncol=1)
