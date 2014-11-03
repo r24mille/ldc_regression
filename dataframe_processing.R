@@ -109,3 +109,36 @@ StripNonexistantInteractions <- function(df) {
   
   return (df)
 }
+
+AddAllCategoricalInteractions <- function(df) {
+  # Manuualy create a column representing the two-tway interaction between all
+  # categorical terms.
+  #
+  # Args:
+  #   df: A smart meter reading data.frame
+  #
+  # Returns:
+  #   The data.frame with several columns added which represent all two-way 
+  #   interactions between categorical variables.
+  
+  # hrstr:price and weekend:price
+  df <- StripNonexistantInteractions(df)
+  
+  # month:hrstr
+  df$mnth_hrstr <- paste0(df$month, df$hrstr)
+  df$mnth_hrstr <- as.factor(df$mnth_hrstr)
+  
+  # month:weekend
+  df$mnth_wknd <- paste0(df$month, df$weekend)
+  df$mnth_wknd <- as.factor(df$mnth_wknd)
+  
+  # month:price
+  df$mnth_price <- paste0(df$month, df$price)
+  df$mnth_price <- as.factor(df$mnth_price)
+  
+  # hrstr:weekend
+  df$hrstr_wknd <- paste0(df$hrstr, df$weekend)
+  df$hrstr_wknd <- as.factor(df$hrstr_wknd)
+  
+  return(df)
+}

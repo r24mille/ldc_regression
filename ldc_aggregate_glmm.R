@@ -1,8 +1,16 @@
 library(segmented) # Find linear regression breakpoint
 library(sme) # For AICc function
+library(BMA) # Bayesian Model Averaging
 library(bestglm) # For bestglm selection using leaps
 library(lars) # A separate lasso package
 library(glmnet) # Explanatory variable selection by lasso
+library(boot) # Cross-validation
+library(lars) # Different LASSO library
+
+# Experiment with devtools and fastVAR
+#library(devtools)
+#install_github("fastVAR", "jeffwong", "master")
+library(fastVAR)
 
 # Source functions in other files
 source('dataframe_processing.R')
@@ -27,7 +35,7 @@ readings.aggregate <- InitAggregateReadings(readings.aggregate)
 #                 based on the model chosen. Maybe just making an empirical 
 #                 choice for CDH break within the context of the final model is 
 #                 the best choice.
-model.readings.glm.presegment <- glm(log(kwh)~(month+hrstr+weekend+price+temperature)^2 - hrstr:price - weekend:price,
+model.readings.glm.presegment <- glm(log(kwh)~ month + hrstr + weekend + price + temperature,
                                      data = readings.aggregate,
                                      family = gaussian)
 seg <- segmented(obj = model.readings.glm.presegment, 
@@ -89,17 +97,17 @@ readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > te
 #                                               subtitle = "(p-value<0.05 stopping criterion)")
 
 # Some data manipulation before selecting a model with bestglm
-temps <- CreatePastTemperatureMatrix(nlags = 6, 
+readings.aggregate <- AddAllCategoricalInteractions(df = readings.aggregate)
+temps <- CreatePastTemperatureMatrix(nlags = 2, 
                                      df.readings = readings.aggregate)
 
 # Initial trim of readings
 readings.trimmed <- TrimColsTouTimeComponents(readings.aggregate)
 FormulaStringNoInterTemperatureInteractions <- function(df.readings, 
-                                                        matrix.temps) {
+                                                        matrix.temps,
+                                                        incl.y = TRUE) {
   # Two vectors of variable names
-  catvars <- colnames(df.readings[, ! colnames(df.readings) %in% c("kwh",
-                                                                   "hrstr_price",
-                                                                   "wknd_price")])
+  catvars <- c("month", "hrstr", "weekend", "price")
   tempvars <- colnames(matrix.temps)
   
   # Create main effect portion of string
@@ -108,8 +116,8 @@ FormulaStringNoInterTemperatureInteractions <- function(df.readings,
                      collapse = " + ")
   
   # Create interactions between categorical variables
-  frmla.str <- paste(c(frmla.str, "month:hrstr", "month:weekend", "month:price", 
-                       "hrstr:weekend", "hrstr_price", "wknd_price"),
+  frmla.str <- paste(c(frmla.str, "mnth_hrstr", "mnth_wknd", "mnth_price", 
+                       "hrstr_wknd", "hrstr_price", "wknd_price"),
                      collapse = " + ")
   
   # Interact each categorical term with temperature, but do not interact 
@@ -121,43 +129,139 @@ FormulaStringNoInterTemperatureInteractions <- function(df.readings,
   }
   
   # logtransform the response variable
-  frmla.str <- paste(c("log(kwh)", frmla.str),
-                     collapse = " ~ ")
+  if (incl.y == TRUE) {
+    frmla.str <- paste(c("log(kwh)", frmla.str),
+                       collapse = " ~ ")
+  }
   
   return(frmla.str)
 }
-frmla.notempintr.str <- FormulaStringNoInterTemperatureInteractions(df.readings = readings.trimmed,
-                                                                    matrix.temps = temps)
+frmla.str.no.intertemp.interac <- FormulaStringNoInterTemperatureInteractions(df.readings = readings.trimmed,
+                                                                             matrix.temps = temps)
+
+FormulaStringOnlyCategoricalInteractions<- function(df.readings, 
+                                                    matrix.temps,
+                                                    incl.y = TRUE) {
+  # Two vectors of variable names
+  catvars <- colnames(df.readings)
+  catvars <- catvars[-1] # trim kwh
+  tempvars <- colnames(matrix.temps)
+  
+  # Create main effect portion of string
+  frmla.str <- paste(cbind(paste(catvars, collapse = " + "),
+                           paste(tempvars, collapse = " + ")),
+                     collapse = " + ")
+  
+  # logtransform the response variable
+  if (incl.y == TRUE) {
+    frmla.str <- paste(c("log(kwh)", frmla.str),
+                       collapse = " ~ ")
+  }
+  return(frmla.str)
+}
+frmla.str.only.category.interac <- FormulaStringOnlyCategoricalInteractions(df.readings = readings.trimmed,
+                                                                            matrix.temps = temps)
+
+FormulaStringOnlyMainEffects <- function(df.readings, 
+                                         matrix.temps,
+                                         incl.y = TRUE) {
+  # Two vectors of variable names
+  catvars <- c("month", "hrstr", "weekend", "price")
+  tempvars <- colnames(matrix.temps)
+  
+  # Create main effect portion of string
+  frmla.str <- paste(cbind(paste(catvars, collapse = " + "),
+                           paste(tempvars, collapse = " + ")),
+                     collapse = " + ")
+  
+  # logtransform the response variable
+  if (incl.y == TRUE) {
+    frmla.str <- paste(c("log(kwh)", frmla.str),
+                       collapse = " ~ ")
+  }
+  
+  return(frmla.str)
+}
+frmla.str.only.main.effects <- FormulaStringOnlyMainEffects(df.readings = readings.trimmed,
+                                                            matrix.temps = temps)
+
+
 
 #readings.aggregate <- cbind(readings.aggregate, temps)
 #readings.trimmed <- TrimColsTouTimeComponents(readings.aggregate)
 readings.trimmed <- cbind(readings.trimmed, temps)
 #explvar.str <- TempLagMaximalExplVars(readings.trimmed)
 #formula.maximal <- formula(paste0("log(kwh) ~ ", explvar.str))
-formula.notempintr <- formula(frmla.notempintr.str)
+frmla.no.intertemp.interac <- formula(frmla.str.no.intertemp.interac)
+frmla.only.category.interac <- formula(frmla.str.only.category.interac)
+frmla.only.main.effects <- formula(frmla.str.only.main.effects)
 
-# LEAPs
-#xmatrix <- as.matrix(readings.trimmed[,-1])
-#ymatrix <- as.matrix(readings.trimmed[,1])
-#designmatrix <- as.data.frame(cbind(explvar.matrix.nointercept, 
-#                                    depvar.matrix))
-#readings.bestglm <- bestglm(Xy = designmatrix)
+# Create a design matrix for reuse in several functions
+kwh.logtransformed <- log(readings.trimmed$kwh)
+only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.interac,
+                                                   data = readings.trimmed)
+
+# Take advantage of LM and use regsubset
+# readings.regsubsets <- regsubsets(x = frmla.only.category.interac,
+#                                   data = readings.trimmed,
+#                                   nbest = 1, # 1 best model for each number of predictors
+#                                   method = "exhaustive",
+#                                   really.big = TRUE)
+# regsubsets.summary <- summary(readings.regsubsets)
+# regsubsets.which.adjr2.max <- which.max(regsubsets.summary$adjr2)
+# regsubsets.summary$which[regsubsets.which.adjr2.max,]
+# 
+# readings.lm <- lm(log(kwh) ~ month + hrstr + weekend + price + templag0 + templag1 + templag2 + templag3 + templag4 + templag5 + templag6 + templag8 + templag12,
+#                   data = readings.trimmed)
+# summary(readings.lm)
+
+# LEAPs errors out?
+# readings.X <- as.matrix(readings.trimmed[,-1])
+# y <- log(readings.trimmed$kwh)
+# readings.Xy <- as.data.frame(cbind(readings.X, y))
+# readings.bestglm <- bestglm(Xy = readings.Xy,
+#                             family = gaussian,
+#                             IC = "BIC")
 
 # BMA
-library(BMA)
-readings.bma <- bic.glm(f = frmla.notempintr,
-                        data = readings.trimmed,
-                        glm.family = gaussian,
-                        nbest = 50)
+# frmla.bma <- update(frmla.only.main.effects,
+#                     . ~ . + month:hrstr + month:weekend + month:price)
+# readings.bma <- bic.glm(f = frmla.bma,
+#                         data = readings.trimmed,
+#                         glm.family = gaussian,
+#                         factor.type = TRUE)
+# summary(readings.bma)
+# imageplot.bma(readings.bma)
+
+# Example LEAPs following the LISA short course
+readings.lasso1 <- as.data.frame(cbind(kwh.logtransformed, temps))
+#pairs(readings.lasso1)
+
+# Plot data to visualize high-level relationship between pairs
+readings.lasso1.manually.standardized <- data.frame(
+  templag0 = (readings.lasso1$templag0    - mean(readings.lasso1$templag0)) / sd(readings.lasso1$templag0),
+  templag1 = (readings.lasso1$templag1    - mean(readings.lasso1$templag1)) / sd(readings.lasso1$templag1),
+  templag2 = (readings.lasso1$templag2    - mean(readings.lasso1$templag2)) / sd(readings.lasso1$templag2)
+)
+readings.lasso1.manually.standardized$kwh.logtransformed <- readings.lasso1$kwh.logtransformed
+
+# Use scale(...) to zscore instead
+readings.lasso1.scaled <- as.data.frame(scale(readings.lasso1[,2:4]))
+readings.lasso1.scaled$kwh.logtransformed <- readings.lasso1$kwh.logtransformed
+
 
 # Use LASSO for better selection of explanatory variables
 # transform dataframe to matrices as required by glmnet
 #explvar.matrix <- model.matrix(formula.maximal, readings.trimmed)
-explvar.matrix <- model.matrix(formula.notempintr, readings.trimmed)
-depvar.matrix <- as.matrix(log(readings.trimmed$kwh), ncol=1)
+frmla.str.without.y <- FormulaStringOnlyMainEffects(df.readings = readings.trimmed,
+                                                    matrix.temps = temps,
+                                                    incl.y = FALSE)
+frmla.str.without.y <- paste(c("~", frmla.str.without.y), collapse = " ")
+explvar.sparse.no.intertemp.interac <- model.matrix(object = frmla.str.without.y, 
+                                                    data = readings.trimmed)
 
 # Remove intercept, glmnet fits an intercept
-explvar.matrix.nointercept <- explvar.matrix[,-1] 
+explvar.sparse.nointercept <- explvar.sparse.no.intertemp.interac[,-1] 
 
 # Use a penalty factor vector to ensure that the main effects are always kept 
 # in the model. Because glmnet requires data in sparse matrix form, it does 
@@ -165,20 +269,22 @@ explvar.matrix.nointercept <- explvar.matrix[,-1]
 # are required if an interaction is to be used.
 # 
 # Vector of 1s by default.
-explvar.matrix.nointercept.pf <- rep(1, ncol(explvar.matrix.nointercept)) 
+explvar.sparse.pf <- rep(1, ncol(explvar.sparse.nointercept)) 
 # Index of templag0 marks start of interactions temperatures, then interactions
-idx.ineteractions.start <- match("templag0", 
-                                 colnames(explvar.matrix.nointercept))
+idx.templag.start <- match("templag0", 
+                                 colnames(explvar.sparse.nointercept))
 # Every variable before hrstr_priceh0off_peak is a main effect and should have 
 # penalty.factor=0 to ensure that no shrinkage is applied and variable is always
 # included in the model.
-explvar.matrix.nointercept.pf[1:(idx.ineteractions.start-1)] <- 0
+explvar.sparse.pf[1:(idx.templag.start-1)] <- 0
 
 # Cross-validate to select a value for lambda
-readings.glmnet.cv <- cv.glmnet(x = explvar.matrix.nointercept, 
+readings.glmnet.cv <- cv.glmnet(x = explvar.sparse.nointercept, 
                                 y = depvar.matrix,
                                 family = "gaussian",
-                                penalty.factor = explvar.matrix.nointercept.pf)
+                                penalty.factor = explvar.sparse.pf)
 
 print(coef(readings.glmnet.cv, s="lambda.1se"))
 plot(readings.glmnet.cv)
+lambda.1se.idx <- match(readings.glmnet.cv$lambda.1se,
+                        readings.glmnet.cv$lambda)

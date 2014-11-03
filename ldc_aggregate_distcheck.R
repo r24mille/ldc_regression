@@ -10,11 +10,23 @@ readings.aggregate <- read.csv(fpath)
 
 # Provide a Q-Q Plot to do a visual check against normal distribution. CAR package has a lot of 
 # convenient defaults (eg. confidence intervals)
-par(mfrow=c(1,2))
 qqPlot(x = readings.aggregate$kwh,
        distribution = "norm",
        mean = mean(readings.aggregate$kwh),
        main = paste0("Q-Q Plot of Normal Dist. vs. Readings (kWh)"),
+       xlab = paste0("Normal Distribution (Mean=",
+                     round(mean(readings.aggregate$kwh), 1),
+                     ", SD=",
+                     round(sd(readings.aggregate$kwh), 1),
+                     ")"),
+       ylab = "Average Reading (kWh) for Aggregate")
+
+# Provide a Q-Q Plot to do a visual check of log(response) against normal distribution. CAR package has a lot of 
+# convenient defaults (eg. confidence intervals)
+qqPlot(x = log(readings.aggregate$kwh),
+       distribution = "norm",
+       mean = mean(readings.aggregate$kwh),
+       main = paste0("Q-Q Plot of Normal Dist. vs. Log-Transformed Readings (kWh)"),
        xlab = paste0("Normal Distribution (Mean=",
                      round(mean(readings.aggregate$kwh), 1),
                      ", SD=",
