@@ -97,8 +97,9 @@ readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > te
 #                                               subtitle = "(p-value<0.05 stopping criterion)")
 
 # Some data manipulation before selecting a model with bestglm
+temp.hrs = 6
 readings.aggregate <- AddAllCategoricalInteractions(df = readings.aggregate)
-temps <- CreatePastTemperatureMatrix(nlags = 2, 
+temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
 
 # Initial trim of readings
@@ -237,17 +238,90 @@ only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.
 readings.lasso1 <- as.data.frame(cbind(kwh.logtransformed, temps))
 #pairs(readings.lasso1)
 
-# Plot data to visualize high-level relationship between pairs
-readings.lasso1.manually.standardized <- data.frame(
-  templag0 = (readings.lasso1$templag0    - mean(readings.lasso1$templag0)) / sd(readings.lasso1$templag0),
-  templag1 = (readings.lasso1$templag1    - mean(readings.lasso1$templag1)) / sd(readings.lasso1$templag1),
-  templag2 = (readings.lasso1$templag2    - mean(readings.lasso1$templag2)) / sd(readings.lasso1$templag2)
-)
-readings.lasso1.manually.standardized$kwh.logtransformed <- readings.lasso1$kwh.logtransformed
+# Use scale(...) to z-score
+readings.lasso1.scaled <- scale(readings.lasso1[,2:(temp.hrs+1)])
 
-# Use scale(...) to zscore instead
-readings.lasso1.scaled <- as.data.frame(scale(readings.lasso1[,2:4]))
-readings.lasso1.scaled$kwh.logtransformed <- readings.lasso1$kwh.logtransformed
+# Visualize after z-score
+#pairs(readings.lasso1.scaled)
+lasso1 <- lars(x = readings.lasso1.scaled, 
+               y = kwh.logtransformed,
+               type = 'lasso',
+               trace = FALSE,
+               normalize = TRUE,
+               intercept = TRUE)
+plot(lasso1)
+lasso1
+round(coef(lasso1), 4)
+
+predict.lars(object = lasso1, 
+             s = .375,
+             mode = "fraction",
+             type = "coefficients")
+predict.lars(object = lasso1,
+             newx = readings.lasso1.scaled, 
+             s = .375,
+             mode = "fraction",
+             type = "fit")
+
+# Examine the ordinary least squares fit of the full model using multiple regression(?)
+OLS <- summary(lm(kwh.logtransformed~., data = as.data.frame(readings.lasso1.scaled)))
+OLS
+absum <- sum(abs(OLS$coeff[-1,1]))
+
+# Manually create the LASSO step plot from the ground up
+t <- apply(abs(coef(lasso1)), 1, sum)
+s <- t/absum
+
+coef.max = max(coef(lasso1))
+coef.min = min(coef(lasso1))
+coef.range = abs(coef.max - coef.min)
+plot(x = s,
+     y = coef(lasso1)[, 1], 
+     ylim = c(coef.min, coef.max),
+     type = "l",
+     lwd = 2,
+     xlab = "Shrinkage factor s",
+     main = "LASSO path - coefficients as a function of shrinkage factor s",
+     xlim = c(0,1.2),
+     axes = FALSE,
+     ylab = "Coefficient",
+     cex.lab = 1.5,
+     cex.axis = 1.4) # Plot one line to initiate things
+axis(1, at = seq(0, 1, .2), 
+     cex.axis = 1.1) # Control x-axis
+axis(2, 
+     at = seq(coef.min, coef.max, round((coef.range/10), 2)),
+     cex.axis = 1.1, 
+     las = 1) # Control y-axis
+
+lines(s, coef(lasso1)[,2], lwd = 2)
+lines(s, coef(lasso1)[,3], lwd = 2)
+lines(s, coef(lasso1)[,4], lwd = 2)
+lines(s, coef(lasso1)[,5], lwd = 2)
+lines(s, coef(lasso1)[,6], lwd = 2)
+
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 1],
+     colnames(readings.lasso1.scaled)[1])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 2],
+     colnames(readings.lasso1.scaled)[2])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 3],
+     colnames(readings.lasso1.scaled)[3])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 4],
+     colnames(readings.lasso1.scaled)[4])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 5],
+     colnames(readings.lasso1.scaled)[5])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 6],
+     colnames(readings.lasso1.scaled)[6])
+
+abline(v=s,
+       col = "darkgray",
+       lty = 3)
 
 
 # Use LASSO for better selection of explanatory variables
