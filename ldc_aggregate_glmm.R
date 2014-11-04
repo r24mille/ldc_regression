@@ -97,7 +97,7 @@ readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > te
 #                                               subtitle = "(p-value<0.05 stopping criterion)")
 
 # Some data manipulation before selecting a model with bestglm
-temp.hrs = 6
+temp.hrs = 23
 readings.aggregate <- AddAllCategoricalInteractions(df = readings.aggregate)
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
@@ -235,15 +235,11 @@ only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.
 # imageplot.bma(readings.bma)
 
 # Example LEAPs following the LISA short course
-readings.lasso1 <- as.data.frame(cbind(kwh.logtransformed, temps))
-#pairs(readings.lasso1)
-
-# Use scale(...) to z-score
-readings.lasso1.scaled <- scale(readings.lasso1[,2:(temp.hrs+1)])
+temps.scaled <- scale(temps) # Use scale(...) to z-score
 
 # Visualize after z-score
 #pairs(readings.lasso1.scaled)
-lasso1 <- lars(x = readings.lasso1.scaled, 
+lasso1 <- lars(x = temps.scaled, 
                y = kwh.logtransformed,
                type = 'lasso',
                trace = FALSE,
@@ -258,13 +254,14 @@ predict.lars(object = lasso1,
              mode = "fraction",
              type = "coefficients")
 predict.lars(object = lasso1,
-             newx = readings.lasso1.scaled, 
+             newx = temps.scaled, 
              s = .375,
              mode = "fraction",
              type = "fit")
 
 # Examine the ordinary least squares fit of the full model using multiple regression(?)
-OLS <- summary(lm(kwh.logtransformed~., data = as.data.frame(readings.lasso1.scaled)))
+OLS <- summary(lm(kwh.logtransformed ~ ., 
+                  data = as.data.frame(temps.scaled)))
 OLS
 absum <- sum(abs(OLS$coeff[-1,1]))
 
@@ -290,7 +287,7 @@ plot(x = s,
 axis(1, at = seq(0, 1, .2), 
      cex.axis = 1.1) # Control x-axis
 axis(2, 
-     at = seq(coef.min, coef.max, round((coef.range/10), 2)),
+     at = round(seq(coef.min, coef.max, (coef.range/10)), 2),
      cex.axis = 1.1, 
      las = 1) # Control y-axis
 
@@ -299,29 +296,90 @@ lines(s, coef(lasso1)[,3], lwd = 2)
 lines(s, coef(lasso1)[,4], lwd = 2)
 lines(s, coef(lasso1)[,5], lwd = 2)
 lines(s, coef(lasso1)[,6], lwd = 2)
+lines(s, coef(lasso1)[,7], lwd = 2)
 
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 1],
-     colnames(readings.lasso1.scaled)[1])
+     colnames(temps.scaled)[1])
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 2],
-     colnames(readings.lasso1.scaled)[2])
+     colnames(temps.scaled)[2])
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 3],
-     colnames(readings.lasso1.scaled)[3])
+     colnames(temps.scaled)[3])
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 4],
-     colnames(readings.lasso1.scaled)[4])
+     colnames(temps.scaled)[4])
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 5],
-     colnames(readings.lasso1.scaled)[5])
+     colnames(temps.scaled)[5])
 text(1.07, 
      coef(lasso1)[nrow(coef(lasso1)), 6],
-     colnames(readings.lasso1.scaled)[6])
+     colnames(temps.scaled)[6])
+text(1.07, 
+     coef(lasso1)[nrow(coef(lasso1)), 7],
+     colnames(temps.scaled)[7])
 
 abline(v=s,
        col = "darkgray",
        lty = 3)
+
+
+# 2nd iteration of LASSO method which includes contrasts of categorical 
+# variables.
+readings.categorical <- readings.trimmed[, colnames(readings.trimmed) %in% c("month",
+                                                                             "hrstr",
+                                                                             "weekend",
+                                                                             "price",
+                                                                             "hrstr_price",
+                                                                             "wknd_price",
+                                                                             "mnth_hrstr",
+                                                                             "mnth_wknd",
+                                                                             "mnth_price",
+                                                                             "hrstr_wknd")]
+# Design matrix representing categorical factors and categorical interactions
+categorical.design <- model.matrix(~ ., 
+                                   data=readings.categorical, 
+                                   contrasts.arg = lapply(readings.categorical[,sapply(readings.categorical, is.factor)], 
+                                                          contrasts, 
+                                                          contrasts=FALSE))
+# Trim incercept off (LASSO computes intercept itself)
+categorical.design <- readings.categorical.design[,-1]
+
+# Stitch together categorical and continuous (scaled) variables for LASSO
+readings.lasso2 <- cbind(categorical.design, temps.scaled)
+lasso2 <- lars(x = readings.lasso2, 
+               y = kwh.logtransformed,
+               type = 'lasso',
+               trace = FALSE,
+               normalize = TRUE,
+               intercept = TRUE)
+
+# 3rd iteraction of LASSO including categorical variable interactions with temp
+trimcat.scaletemp <- cbind(readings.categorical, as.data.frame(temps.scaled))
+twoway.nointertemp.str <- FormulaStringNoInterTemperatureInteractions(readings.categorical, 
+                                                                      temps.scaled,
+                                                                      incl.y = FALSE)
+
+# Design matrix representing main effects, categorical interactions, and temp
+# interaction with categorical factors
+twoway.nointertemp.str <- paste("~", twoway.nointertemp.str, collapse = " ")
+twoway.nointertemp.design <- model.matrix(formula(twoway.nointertemp.str),
+                                          data = trimcat.scaletemp,
+                                          contrasts.arg = lapply(trimcat.scaletemp[,sapply(trimcat.scaletemp, is.factor)], 
+                                                                 contrasts, 
+                                                                 contrasts=FALSE))
+twoway.nointertemp.design <- twoway.nointertemp.design[,-1] # Trim off intercept
+
+# Stitch together categorical and continuous (scaled) variables for LASSO
+lasso3 <- lars(x = twoway.nointertemp.design, 
+               y = kwh.logtransformed,
+               type = 'lasso',
+               trace = FALSE,
+               normalize = TRUE,
+               intercept = TRUE)
+
+
 
 
 # Use LASSO for better selection of explanatory variables
