@@ -97,7 +97,7 @@ readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > te
 #                                               subtitle = "(p-value<0.05 stopping criterion)")
 
 # Some data manipulation before selecting a model with bestglm
-temp.hrs = 23
+temp.hrs = 8
 readings.aggregate <- AddAllCategoricalInteractions(df = readings.aggregate)
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
@@ -167,7 +167,9 @@ FormulaStringOnlyMainEffects <- function(df.readings,
                                          matrix.temps,
                                          incl.y = TRUE) {
   # Two vectors of variable names
-  catvars <- c("month", "hrstr", "weekend", "price")
+  readings.colnames <- colnames(df.readings)
+  catvars <- subset(readings.colnames, 
+                    readings.colnames %in% c("month", "hrstr", "weekend", "price"))
   tempvars <- colnames(matrix.temps)
   
   # Create main effect portion of string
@@ -259,70 +261,8 @@ predict.lars(object = lasso1,
              mode = "fraction",
              type = "fit")
 
-# Examine the ordinary least squares fit of the full model using multiple regression(?)
-OLS <- summary(lm(kwh.logtransformed ~ ., 
-                  data = as.data.frame(temps.scaled)))
-OLS
-absum <- sum(abs(OLS$coeff[-1,1]))
-
-# Manually create the LASSO step plot from the ground up
-t <- apply(abs(coef(lasso1)), 1, sum)
-s <- t/absum
-
-coef.max = max(coef(lasso1))
-coef.min = min(coef(lasso1))
-coef.range = abs(coef.max - coef.min)
-plot(x = s,
-     y = coef(lasso1)[, 1], 
-     ylim = c(coef.min, coef.max),
-     type = "l",
-     lwd = 2,
-     xlab = "Shrinkage factor s",
-     main = "LASSO path - coefficients as a function of shrinkage factor s",
-     xlim = c(0,1.2),
-     axes = FALSE,
-     ylab = "Coefficient",
-     cex.lab = 1.5,
-     cex.axis = 1.4) # Plot one line to initiate things
-axis(1, at = seq(0, 1, .2), 
-     cex.axis = 1.1) # Control x-axis
-axis(2, 
-     at = round(seq(coef.min, coef.max, (coef.range/10)), 2),
-     cex.axis = 1.1, 
-     las = 1) # Control y-axis
-
-lines(s, coef(lasso1)[,2], lwd = 2)
-lines(s, coef(lasso1)[,3], lwd = 2)
-lines(s, coef(lasso1)[,4], lwd = 2)
-lines(s, coef(lasso1)[,5], lwd = 2)
-lines(s, coef(lasso1)[,6], lwd = 2)
-lines(s, coef(lasso1)[,7], lwd = 2)
-
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 1],
-     colnames(temps.scaled)[1])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 2],
-     colnames(temps.scaled)[2])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 3],
-     colnames(temps.scaled)[3])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 4],
-     colnames(temps.scaled)[4])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 5],
-     colnames(temps.scaled)[5])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 6],
-     colnames(temps.scaled)[6])
-text(1.07, 
-     coef(lasso1)[nrow(coef(lasso1)), 7],
-     colnames(temps.scaled)[7])
-
-abline(v=s,
-       col = "darkgray",
-       lty = 3)
+PlotLasso(lars.obj = lasso1, y = kwh.logtransformed, design.mat = temps.scaled,
+          xvar = "degf")
 
 
 # 2nd iteration of LASSO method which includes contrasts of categorical 
@@ -379,6 +319,60 @@ lasso3 <- lars(x = twoway.nointertemp.design,
                normalize = TRUE,
                intercept = TRUE)
 
+
+# 4th example of LASSO, run with only pre-TOU data and no price factor
+pretou.trimmed <- subset(readings.trimmed, price == "flat")
+pretou.categorical.main <- pretou.trimmed[, colnames(pretou.trimmed) %in% c("month",
+                                                                            "hrstr",
+                                                                            "weekend")]
+temps.pretou <- pretou.trimmed[, ! colnames(pretou.trimmed) %in% c("kwh", 
+                                                                   "month",
+                                                                   "hrstr",
+                                                                   "weekend",
+                                                                   "price",
+                                                                   "hrstr_price",
+                                                                   "wknd_price",
+                                                                   "mnth_hrstr",
+                                                                   "mnth_wknd",
+                                                                   "mnth_price",
+                                                                   "hrstr_wknd")]
+temps.pretou.scaled <- scale(temps.pretou)
+kwh.pretou.logtransformed <- log(pretou.trimmed$kwh)
+
+pretou.main.str <- FormulaStringOnlyMainEffects(df.readings = pretou.categorical.main,
+                             matrix.temps = temps.pretou,
+                             incl.y = FALSE)
+pretou.main.str <- paste("~", pretou.main.str, collapse = " ")
+
+pretou.main.scaletemp <- cbind(pretou.categorical.main, as.data.frame(temps.pretou.scaled))
+pretou.main.design <- model.matrix(formula(pretou.main.str),
+                                          data = pretou.main.scaletemp,
+                                          contrasts.arg = lapply(pretou.main.scaletemp[,sapply(pretou.main.scaletemp, is.factor)], 
+                                                                 contrasts, 
+                                                                 contrasts=FALSE))
+pretou.main.design <- pretou.main.design[,-1] # Trim off intercept
+
+# Stitch together categorical and continuous (scaled) variables for LASSO
+lasso4 <- lars(x = pretou.main.design, 
+               y = kwh.pretou.logtransformed,
+               type = 'lasso',
+               trace = TRUE,
+               normalize = TRUE,
+               intercept = TRUE)
+
+lasso4.cv <- cv.glmnet(x = pretou.main.design, 
+                       y = kwh.pretou.logtransformed,
+                       family = "gaussian")
+plot(x = lasso4.cv,
+     sign.lambda = -1)
+
+
+lasso4.glmnet <- glmnet(x = pretou.main.design, 
+                       y = kwh.pretou.logtransformed,
+                       family = "gaussian")
+plot(x = lasso4.glmnet,
+     xvar = "dev",
+     label = TRUE)
 
 
 

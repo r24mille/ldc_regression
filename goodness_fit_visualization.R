@@ -448,3 +448,103 @@ Plot3DStepwiseResults <- function(df, title) {
           margins=c(5,10),
           na.rm = TRUE)
 }
+
+PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage", 
+                      term.labels = "path") {
+  # 
+  # Args:
+  #   lars.obj: The LASSO object returned by the lars(...) function.
+  #   y : The response variable used in the LARS LASSO operation
+  #   design.mat: The design matrix used in the LARS LASSO operation
+  #   xvar: Controls the type of the x-axis and should be one of c("shrinkage", 
+  #         "rsq", "degf"). "shrinkage" (default) coefficient as a function of 
+  #         the shrinkage factor, s. "rsq" plots coefficient as a function of 
+  #         the r-squared value of that step. "degf" plots coefficient as a 
+  #         function of the degrees of freedom in the model.
+  #   term.labels: Controls how terms should be labeled on the plot and should 
+  #         be one of c("path", "randkey", "catkey"). "path" (default) labels 
+  #         the term on its LASSO path line. "randlegend" randomly colors each
+  #         term and creates a legend. "catlegend" colors the lines by the 
+  #         factor/term they come from and creates an a matching legend.
+  #
+  
+  # Set some plot attributes
+  par(xpd = TRUE, # turn off clipping
+      mar = c(5, 4.5, 3, 3)) # Add margins to the right (b, l, t, r)
+  
+  # Create convenient variables for coefficients to be used on y-axis
+  coef.max = max(coef(lars.obj))
+  coef.min = min(coef(lars.obj))
+  coef.range = abs(coef.max - coef.min)
+  
+  nterms <- ncol(design.mat)
+  xvar.values = rep(0, nterms)
+  xvar.label = ""
+  xvar.lim <- c(0, 1)
+  xvar.at <- seq(0, 1, .1)
+  
+  if (xvar == "shrinkage") {
+    # Examine the ordinary least squares fit of the full model using multiple regression(?)
+    OLS <- summary(lm(y ~ ., data = as.data.frame(design.mat)))
+    absum <- sum(abs(OLS$coeff[-1,1]))
+    
+    # Manually create the LASSO step plot from the ground up
+    t <- apply(X = abs(coef(lars.obj)), 
+               MARGIN = 1, # 1 indicates rows
+               FUN = sum)
+    s <- t/absum
+    xvar.values <- s
+    xvar.label <- "Shrinkage Factor"
+    xvar.lim <- c(min(s), max(s))
+    xvar.at <- seq(min(s), max(s), .2)
+  } else if (xvar == "rsq") {
+    rsq.min <- min(lars.obj$R2)
+    rsq.max <- max(lars.obj$R2)
+    rsq.max.rndup = ceiling(rsq.max * 10) / 10;
+    
+    xvar.values <- lars.obj$R2
+    xvar.label <- "R-Squared"
+    xvar.lim <- c(0, rsq.max.rndup)
+    xvar.at <- seq(0, rsq.max.rndup, round((rsq.max/11), 2))
+  } else if (xvar == "degf") {
+    degf.min <- min(lars.obj$df)
+    degf.max <- max(lars.obj$df)
+    
+    xvar.values <- lars.obj$df
+    xvar.label <- "Degrees of Freedom in Model"
+    xvar.lim <- c(degf.min, degf.max)
+    xvar.at <- seq(degf.min, degf.max, ceiling(degf.max/10))
+  }
+
+  plot(x = xvar.values,
+       y = coef(lars.obj)[, 1], 
+       ylim = c(coef.min, coef.max),
+       type = "l",
+       lwd = 2,
+       xlab = xvar.label,
+       main = paste("LASSO Path: Coefficients as a Function of", xvar.label),
+       xlim = xvar.lim,
+       axes = FALSE,
+       ylab = "Coefficient",
+       cex.lab = 1.5,
+       cex.axis = 1.4) # Plot one line to initiate things
+  axis(1, at = xvar.at, cex.axis = 1.1) # Control x-axis
+  axis(2, 
+       at = round(seq(coef.min, coef.max, (coef.range/10)), 2),
+       cex.axis = 1.1, 
+       las = 1) # Control y-axis
+  
+  for(i in 1:nterms) {
+    # Draw the LASSO line
+    lines(xvar.values, coef(lars.obj)[,i], lwd = 2)
+    
+    # Label the line at its endpoint
+    text(xvar.lim[2] + (xvar.at[2]/3), 
+         coef(lars.obj)[nrow(coef(lars.obj)), i],
+         colnames(design.mat)[i])
+  }
+  
+  abline(v = xvar.values,
+         col = "darkgray",
+         lty = 3)
+}
