@@ -548,3 +548,173 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
          col = "darkgray",
          lty = 3)
 }
+
+PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10, 
+                                     backtransform.mse = "none",
+                                     xvar = "shrinkage") {
+  # Args:
+  #   design.mat: Design matrix suitable to be passed to LARS for LASSO
+  #   y.vec: Vector of of response variables associated with the design matrix
+  #   k: The number of folds in k-folds cross-validation
+  #   backtransform.mse: The type of backtransformation to apply to MSE (if any)
+  #                      must be a value of c("none", "log"). The default is 
+  #                      "none".
+  #   xvar: The variable to plot on the x-axis, must be a value of 
+  #         c("shrinkage", "step"). The default is "shrinkage".
+  # Generate a vector of holdout labels, vector same length as number of rows 
+  # in the dataset. Values of holdout labels will be on the range 1-k
+  cvlab <- sample(1:k, length(y.vec), replace = TRUE)
+  
+  # Create a vector of candidate s values (reasonable number for now)
+  if (xvar == "step") {
+    svec <- seq(1, ncol(design.mat), 1)
+  } else {
+    svec <- seq(0, 1, .05)
+  }
+  J <- length(svec) # How many versions of s did I decide to use?
+  
+  # Going to perform LASSO k times, create a list of k LARS result objects
+  lassolist1 <- list()
+  
+  # Initialize a list to store prediction from each LASSO set
+  predtrain1 <- list()
+  
+  # Compute MSE from predictions
+  MSEstore1 <- matrix(NA, J, k) # J values of s (rows), k hold-out sets (columns)
+  
+  # Use a for loop to get each lasso fit holding out the ith set
+  # Then predict the ith set using the holdout model
+  for (i in 1:k) {
+    lassolist1[[i]] <- lars(x = design.mat[cvlab!=i,], 
+                            y = y.vec[cvlab!=i],
+                            type = 'lasso',
+                            trace = FALSE,
+                            normalize = TRUE,
+                            intercept = TRUE)
+    if (xvar == "step") {
+      pred.mode = "step"
+    } else {
+      pred.mode = "fraction"
+    }
+    predtrain1[[i]] <- predict.lars(object = lassolist1[[i]],
+                                    newx = design.mat[cvlab == i,], 
+                                    s = svec,
+                                    mode = pred.mode,
+                                    type = "fit")$fit
+    
+    
+    # Start a new loop to get MSE for each combination of the ith holdout set and 
+    # jth value of s.
+    for(j in 1:J) {
+      # This computes MSE
+      if (backtransform.mse == "log") {
+        predtrain.backtranformed <- exp(predtrain1[[i]][,j])
+        train.backtransformed <- exp(y.vec[cvlab==i])
+        MSEstore1[j,i] <- mean((predtrain.backtranformed - train.backtransformed)^2)
+      } else {
+        predtrain.backtranformed <- predtrain1[[i]][,j]
+        train.backtransformed <- y.vec[cvlab==i]
+        MSEstore1[j,i] <- mean((predtrain.backtranformed - train.backtransformed)^2)
+      }
+    }
+  }
+  
+  # Compute mean and standard error of the observed MSEs at J values
+  meanMSE <- apply(MSEstore1, 1, mean)
+  stdMSE <- apply(MSEstore1, 1, sd)/sqrt(k)
+  
+  # y label can change based on whether its backtransformed
+  y.label <- "Mean Square Error (MSE)"
+  if (backtransform.mse == "log") {
+    y.label <- "Backtransformed Mean Square Error (MSE)"
+  }
+  
+  # x label can change based on how predictions were iterated
+  x.label <- "Shrinkage Factor s"
+  if (xvar == "step") {
+    x.label <- "Explanatory Variable Inclusion Step"
+  }
+  
+  # Plot the change in MSE as shrinkage factor increases. Error bars established 
+  # by kfolds cross-validation.
+  mse.lwr <- min(meanMSE) - max(stdMSE)
+  mse.upr <- max(meanMSE) + max(stdMSE)
+  plot(x = svec, 
+       y = meanMSE, 
+       ylim = c(mse.lwr, mse.upr), 
+       pch = 16, 
+       col = colors()[258], 
+       axes = FALSE, 
+       cex = 1.2, 
+       xlab = x.label,
+       ylab = y.label, 
+       cex.lab = 1.3, 
+       main = "Average Cross-Validation Prediction Error as a Function of s")
+  
+  # Adjust x-axis based on how LASSO is being iterated
+  if (xvar == "step") {
+    svec.rng <- (max(svec) - min(svec))
+    xvar.at <- seq(min(svec), max(svec), ceiling(svec.rng / 10))
+  } else {
+    svec.rng <- (max(svec) - min(svec))
+    xvar.at <- seq(min(svec), max(svec), round((svec.rng / 10), 2))
+  }
+
+  axis(1, at = xvar.at, cex.axis = 1.2)
+  axis(2, las = 1, 
+       at = seq(round(mse.lwr, 2), round(mse.upr, 2), round(((mse.upr - mse.lwr)/15), 2)), 
+       cex.axis = 1.2)
+  lines(x = svec, 
+        y = meanMSE, 
+        lty = 1, 
+        col = colors()[258])
+  
+  # Standard error interval
+  for (i in 1:J) {
+    arrows(x0 = svec[i], 
+           y0 = (meanMSE[i] - stdMSE[i]), 
+           x1 = svec[i], 
+           y1 = (meanMSE[i] + stdMSE[i]), 
+           angle = 90, 
+           code = 3, # Arrow head at both ends of the bar
+           length=0.05, # Shorten up the bar
+           col = "black", 
+           lty = 1)
+  }
+  
+  mse.min.idx <- which.min(meanMSE)
+  mse.min.std <- stdMSE[mse.min.idx]
+  mse.1se.idx <- which(meanMSE < (min(meanMSE) + mse.min.std))[1]
+  mse.1se <- meanMSE[mse.1se.idx]
+  # 1SE threshold line
+  abline(h = (min(meanMSE) + mse.min.std), 
+         lty = 2)
+  # Selected shrinkage value
+  points(x = svec[mse.1se.idx], 
+         y = meanMSE[mse.1se.idx], 
+         col = "red", 
+         pch = 15, 
+         cex = 1.3) 
+  
+  # y line legend text can change based on whether its backtransformed
+  y.leg <- "Mean MSE"
+  if (backtransform.mse == "log") {
+    y.leg <- "Mean Backtransformed MSE"
+  }
+  
+  # Highlighted point can change based on how predictions were iterated
+  highlight.leg <- "Chosen shrinkage value (s)"
+  if (xvar == "step") {
+    highlight.leg <- "Chosen number of LASSO steps"
+  }
+  
+  legend("topright", 
+         legend = c(y.leg, 
+                    "Standard Error (SE)", 
+                    "1 SE above lowest mean MSE",
+                    highlight.leg),
+         pch = c(16, NA, NA, 15),
+         col = c(colors()[258], 1, 1, "red"),
+         cex = 1.1,
+         lty = c(1, 1, 2, NA))
+}
