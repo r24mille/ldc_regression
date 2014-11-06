@@ -264,6 +264,58 @@ predict.lars(object = lasso1,
 PlotLasso(lars.obj = lasso1, y = kwh.logtransformed, design.mat = temps.scaled,
           xvar = "degf")
 
+# Manually perform k-folds cross-validation following the LISA video for
+# picking the shrinkage factor value (ie. value of s)
+set.seed(3214657) # Maybe undo... keep seed the same for now
+
+# Generate a vector of holdout labels, vector same length as number of rows 
+# in the dataset. Values of holdout labels will be on the range 1-k
+k = 10
+cvlab <- sample(1:k, length(kwh.logtransformed), replace = TRUE)
+
+# How many of each label are there?
+table(cvlab)
+
+# Create a vector of candidate s values (reasonable number for now)
+svec <- seq(0, 1, .05)
+J <- length(svec) # How many versions of s did I decide to use?
+
+# Going to perform LASSO k times, create a list of k LARS result objects
+lassolist1 <- list()
+
+# Initialize a list to store prediction from each LASSO set
+predtrain1 <- list()
+
+# Compute MSE from predictions
+MSEstore1 <- matrix(NA, J, k) # J values of s (rows), k hold-out sets (columns)
+
+# Use a for loop to get each lasso fit holding out the ith set
+# Then predict the ith set using the holdout model
+for (i in 1:k) {
+  lassolist1[[i]] <- lars(x = temps.scaled[cvlab!=i,], 
+                          y = kwh.logtransformed[cvlab!=i],
+                          type = 'lasso',
+                          trace = FALSE,
+                          normalize = TRUE,
+                          intercept = TRUE)
+  predtrain1[[i]] <- fit <- predict.lars(object = lassolist1[[i]],
+                                         newx = temps.scaled[cvlab==i,], 
+                                         s = svec,
+                                         mode = "fraction",
+                                         type = "fit")
+
+
+  # Start a new loop to get MSE for each combination of the ith holdout set and 
+  # jth value of s.
+  for(j in 1:J) {
+    MSEstore1[j,i] <- mean((predtrain1[[i]][,j] - kwh.logtransformed[cvlab==i])^2) # This computes MSE
+  }
+}
+
+# Compute mean and standard error of the observed MSEs at J values
+meanMSE <- apply(MSEstore1, 1, mean)
+stdMSE <- apply(MSEstore1, 1, sd)/sqrt(k)
+
 
 # 2nd iteration of LASSO method which includes contrasts of categorical 
 # variables.
