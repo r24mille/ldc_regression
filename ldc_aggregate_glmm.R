@@ -239,7 +239,7 @@ only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.
 temps.scaled <- scale(temps) # Use scale(...) to z-score
 
 # Visualize after z-score
-#pairs(readings.lasso1.scaled)
+pairs(cbind(kwh.logtransformed, temps.scaled))
 lasso1 <- lars(x = temps.scaled, 
                y = kwh.logtransformed,
                type = 'lasso',
@@ -291,7 +291,7 @@ categorical.design <- model.matrix(~ .,
                                                           contrasts, 
                                                           contrasts=FALSE))
 # Trim incercept off (LASSO computes intercept itself)
-categorical.design <- readings.categorical.design[,-1]
+categorical.design <- categorical.design[,-1]
 
 # Stitch together categorical and continuous (scaled) variables for LASSO
 readings.lasso2 <- cbind(categorical.design, temps.scaled)
@@ -360,6 +360,12 @@ pretou.main.design <- model.matrix(formula(pretou.main.str),
 pretou.main.design <- pretou.main.design[,-1] # Trim off intercept
 
 # Stitch together categorical and continuous (scaled) variables for LASSO
+step.1se <- PlotLassoCrossValidation(design.mat = pretou.main.design, 
+                                y.vec = kwh.pretou.logtransformed, 
+                                k = 10, 
+                                backtransform.mse = "log",
+                                xvar = "step")
+
 lasso4 <- lars(x = pretou.main.design, 
                y = kwh.pretou.logtransformed,
                type = 'lasso',
@@ -367,57 +373,41 @@ lasso4 <- lars(x = pretou.main.design,
                normalize = TRUE,
                intercept = TRUE)
 
-lasso4.cv <- cv.glmnet(x = pretou.main.design, 
-                       y = kwh.pretou.logtransformed,
-                       family = "gaussian")
-plot(x = lasso4.cv,
-     sign.lambda = -1)
+# degf are 1 higher than LASSO step due to intercept
+degf.1se <- unlist(step.1se, use.names = FALSE) + 1 
+PlotLasso(lars.obj = lasso4, y = kwh.pretou.logtransformed, 
+          design.mat = pretou.main.design, xvar = "degf", 
+          term.labels = "catleg", line.marker = "1se", xvar.parsimonious = degf.1se)
 
+lasso5 <- lars(x = pretou.main.design, 
+               y = kwh.pretou.logtransformed,
+               type = 'lasso',
+               trace = TRUE,
+               normalize = TRUE,
+               intercept = TRUE,
+               max.steps = unlist(step.1se, use.names = FALSE))
 
-lasso4.glmnet <- glmnet(x = pretou.main.design, 
-                       y = kwh.pretou.logtransformed,
-                       family = "gaussian")
-plot(x = lasso4.glmnet,
-     xvar = "dev",
-     label = TRUE)
+PlotLasso(lars.obj = lasso5, y = kwh.pretou.logtransformed, 
+          design.mat = pretou.main.design, xvar = "degf", 
+          term.labels = "catleg", line.marker = "1se", xvar.parsimonious = degf.1se)
 
+# Order that terms were added
+for (i in 1:length(lasso5$actions)) {
+  print(names(lasso5$actions[[i]]))
+}
 
-
-# Use LASSO for better selection of explanatory variables
-# transform dataframe to matrices as required by glmnet
-#explvar.matrix <- model.matrix(formula.maximal, readings.trimmed)
-frmla.str.without.y <- FormulaStringOnlyMainEffects(df.readings = readings.trimmed,
-                                                    matrix.temps = temps,
-                                                    incl.y = FALSE)
-frmla.str.without.y <- paste(c("~", frmla.str.without.y), collapse = " ")
-explvar.sparse.no.intertemp.interac <- model.matrix(object = frmla.str.without.y, 
-                                                    data = readings.trimmed)
-
-# Remove intercept, glmnet fits an intercept
-explvar.sparse.nointercept <- explvar.sparse.no.intertemp.interac[,-1] 
-
-# Use a penalty factor vector to ensure that the main effects are always kept 
-# in the model. Because glmnet requires data in sparse matrix form, it does 
-# not know that the earlier variables are main effects, and that main effects 
-# are required if an interaction is to be used.
+# lasso4.cv <- cv.glmnet(x = pretou.main.design, 
+#                        y = kwh.pretou.logtransformed,
+#                        family = "gaussian")
+# plot(x = lasso4.cv,
+#      sign.lambda = -1)
 # 
-# Vector of 1s by default.
-explvar.sparse.pf <- rep(1, ncol(explvar.sparse.nointercept)) 
-# Index of templag0 marks start of interactions temperatures, then interactions
-idx.templag.start <- match("templag0", 
-                                 colnames(explvar.sparse.nointercept))
-# Every variable before hrstr_priceh0off_peak is a main effect and should have 
-# penalty.factor=0 to ensure that no shrinkage is applied and variable is always
-# included in the model.
-explvar.sparse.pf[1:(idx.templag.start-1)] <- 0
-
-# Cross-validate to select a value for lambda
-readings.glmnet.cv <- cv.glmnet(x = explvar.sparse.nointercept, 
-                                y = depvar.matrix,
-                                family = "gaussian",
-                                penalty.factor = explvar.sparse.pf)
-
-print(coef(readings.glmnet.cv, s="lambda.1se"))
-plot(readings.glmnet.cv)
-lambda.1se.idx <- match(readings.glmnet.cv$lambda.1se,
-                        readings.glmnet.cv$lambda)
+# 
+# lasso4.glmnet <- glmnet(x = pretou.main.design, 
+#                        y = kwh.pretou.logtransformed,
+#                        family = "gaussian")
+# plot(x = lasso4.glmnet,
+#      xvar = "dev",
+#      label = TRUE)
+# 
+# 

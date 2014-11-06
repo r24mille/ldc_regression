@@ -450,7 +450,8 @@ Plot3DStepwiseResults <- function(df, title) {
 }
 
 PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage", 
-                      term.labels = "path") {
+                      term.labels = "path", line.marker = "xsteps", 
+                      xvar.parsimonious) {
   # 
   # Args:
   #   lars.obj: The LASSO object returned by the lars(...) function.
@@ -462,15 +463,61 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
   #         the r-squared value of that step. "degf" plots coefficient as a 
   #         function of the degrees of freedom in the model.
   #   term.labels: Controls how terms should be labeled on the plot and should 
-  #         be one of c("path", "randkey", "catkey"). "path" (default) labels 
-  #         the term on its LASSO path line. "randlegend" randomly colors each
-  #         term and creates a legend. "catlegend" colors the lines by the 
+  #         be one of c("path", "catleg"). "path" (default) labels 
+  #         the term on its LASSO path line. "catlegend" colors the lines by the 
   #         factor/term they come from and creates an a matching legend.
-  #
+  #   line.marker: Controls what information will be highlighted by the vertical 
+  #         dashed line, must be one of c("xsteps", "1se"). "xsteps" simply 
+  #         marks ech step of x (default). "1se" highlights the x value that 
+  #         corresponds to the parsimonious fit, within 1 SE of the optimal 
+  #         model as chosen during cross-validation.
+  #   xvar.parsimonious: If line.marker = "1se" then this value is required. It 
+  #         is the index of the parsimonious x value that will be highlighted by 
+  #         the dotted abline.
+     
+  # turn off clipping and add margins (b, l, t, r)
+  if (term.labels == "catleg") {
+    par(xpd = FALSE, mar = c(5, 4.5, 3, 1))
+  } else {
+    par(xpd = TRUE, mar = c(5, 4.5, 3, 3))
+  }
   
-  # Set some plot attributes
-  par(xpd = TRUE, # turn off clipping
-      mar = c(5, 4.5, 3, 3)) # Add margins to the right (b, l, t, r)
+  # Set up line colors
+  col.lines <- rep("black", ncol(design.mat))
+  leg.labels <- list()
+  if (term.labels == "catleg") {
+    col.month <- "red"
+    col.hrstr <- "blue"
+    col.weekend <- "green"
+    col.templag <- "orange"
+    
+    colnames.design.mat <- colnames(design.mat)
+    indeces.term.month <- grep("^monthm[[:digit:]]*$", colnames.design.mat, 
+                               perl = TRUE, value = FALSE)
+    indeces.term.hrstr <- grep("^hrstrh[[:digit:]]*$", colnames.design.mat, 
+                               perl = TRUE, value = FALSE)
+    indeces.term.weekend <- grep("^weekend[[:alpha:]]*$", colnames.design.mat, 
+                                 perl = TRUE, value = FALSE)
+    indeces.term.templag <- grep("^templag[[:digit:]]*$", colnames.design.mat, 
+                                 perl = TRUE, value = FALSE)
+    
+    col.lines[indeces.term.month] <- col.month
+    if(length(indeces.term.month) > 0) {
+      leg.labels["Month"] <- col.month
+    }
+    col.lines[indeces.term.hrstr] <- col.hrstr
+    if(length(indeces.term.hrstr) > 0) {
+      leg.labels["Hour of Day"] <- col.hrstr
+    }
+    col.lines[indeces.term.weekend] <- col.weekend
+    if(length(indeces.term.weekend) > 0) {
+      leg.labels["Weekday or Weekend/Hol."] <- col.weekend
+    }
+    col.lines[indeces.term.templag] <- col.templag
+    if(length(indeces.term.templag) > 0) {
+      leg.labels["Temperature History"] <- col.templag
+    }
+  }
   
   # Create convenient variables for coefficients to be used on y-axis
   coef.max = max(coef(lars.obj))
@@ -509,11 +556,12 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
   } else if (xvar == "degf") {
     degf.min <- min(lars.obj$df)
     degf.max <- max(lars.obj$df)
+    degf.rng <- degf.max - degf.min
     
     xvar.values <- lars.obj$df
     xvar.label <- "Degrees of Freedom in Model"
     xvar.lim <- c(degf.min, degf.max)
-    xvar.at <- seq(degf.min, degf.max, ceiling(degf.max/10))
+    xvar.at <- seq(degf.min, degf.max, floor(degf.rng/10))
   }
 
   plot(x = xvar.values,
@@ -522,31 +570,55 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
        type = "l",
        lwd = 2,
        xlab = xvar.label,
-       main = paste("LASSO Path: Coefficients as a Function of", xvar.label),
+       main = paste("LASSO Path: Coefficients as", xvar.label, "Change"),
        xlim = xvar.lim,
+       cex.lab = 1.1,
        axes = FALSE,
        ylab = "Coefficient",
-       cex.lab = 1.5,
-       cex.axis = 1.4) # Plot one line to initiate things
-  axis(1, at = xvar.at, cex.axis = 1.1) # Control x-axis
+       col = rgb(0, 0, 0, 0, maxColorValue = 1)) # Transparent line
+  
+  axis(1, at = xvar.at, cex.axis = 1) # Control x-axis
+  
   axis(2, 
        at = round(seq(coef.min, coef.max, (coef.range/10)), 2),
-       cex.axis = 1.1, 
+       cex.axis = 1, 
        las = 1) # Control y-axis
+  
+  if (line.marker == "1se") {
+    abline(v = xvar.parsimonious,
+           col = "darkgray",
+           lty = 3)
+  } else {
+    abline(v = xvar.values,
+           col = "darkgray",
+           lty = 3)
+  }
   
   for(i in 1:nterms) {
     # Draw the LASSO line
-    lines(xvar.values, coef(lars.obj)[,i], lwd = 2)
+    lines(xvar.values, 
+          coef(lars.obj)[,i], 
+          col = col.lines[i],
+          lwd = 1.3)
     
-    # Label the line at its endpoint
-    text(xvar.lim[2] + (xvar.at[2]/3), 
-         coef(lars.obj)[nrow(coef(lars.obj)), i],
-         colnames(design.mat)[i])
+    if (term.labels == "path") {
+      # Label the line at its endpoint
+      text(xvar.lim[2] + (xvar.at[2]/3), 
+           coef(lars.obj)[nrow(coef(lars.obj)), i],
+           colnames(design.mat)[i])
+    }
   }
   
-  abline(v = xvar.values,
-         col = "darkgray",
-         lty = 3)
+  if (term.labels == "catleg") {
+    legend("bottomleft",
+           title = "Terms",
+           legend = names(leg.labels), 
+           lty = 1,
+           lwd = 1.3,
+           col = unlist(leg.labels, use.names = FALSE))
+  }
+  
+
 }
 
 PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10, 
@@ -561,6 +633,11 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   #                      "none".
   #   xvar: The variable to plot on the x-axis, must be a value of 
   #         c("shrinkage", "step"). The default is "shrinkage".
+  #
+  # Return:
+  #   The parsimonious value chosen from the x-axis, within 1 standard error 
+  #   of optimal value chosen during cross-validation.
+  
   # Generate a vector of holdout labels, vector same length as number of rows 
   # in the dataset. Values of holdout labels will be on the range 1-k
   cvlab <- sample(1:k, length(y.vec), replace = TRUE)
@@ -630,9 +707,9 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   }
   
   # x label can change based on how predictions were iterated
-  x.label <- "Shrinkage Factor s"
+  x.label <- "Shrinkage Factor"
   if (xvar == "step") {
-    x.label <- "Explanatory Variable Inclusion Step"
+    x.label <- "LASSO Step"
   }
   
   # Plot the change in MSE as shrinkage factor increases. Error bars established 
@@ -645,11 +722,10 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
        pch = 16, 
        col = colors()[258], 
        axes = FALSE, 
-       cex = 1.2, 
        xlab = x.label,
        ylab = y.label, 
-       cex.lab = 1.3, 
-       main = "Average Cross-Validation Prediction Error as a Function of s")
+       cex.lab = 1.1,
+       main = paste("Avg. Cross-Validation Prediction Error as", x.label, "Changes"))
   
   # Adjust x-axis based on how LASSO is being iterated
   if (xvar == "step") {
@@ -660,10 +736,13 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
     xvar.at <- seq(min(svec), max(svec), round((svec.rng / 10), 2))
   }
 
-  axis(1, at = xvar.at, cex.axis = 1.2)
-  axis(2, las = 1, 
-       at = seq(round(mse.lwr, 2), round(mse.upr, 2), round(((mse.upr - mse.lwr)/15), 2)), 
-       cex.axis = 1.2)
+  axis(1, at = xvar.at, cex.axis = 1)
+  axis(2, 
+       las = 1, 
+       at = seq(round(mse.lwr, 2), 
+                round(mse.upr, 2), 
+                round(((mse.upr - mse.lwr)/15), 2)), 
+       cex.axis = 1)
   lines(x = svec, 
         y = meanMSE, 
         lty = 1, 
@@ -696,12 +775,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
          pch = 15, 
          cex = 1.3) 
   
-  # y line legend text can change based on whether its backtransformed
-  y.leg <- "Mean MSE"
-  if (backtransform.mse == "log") {
-    y.leg <- "Mean Backtransformed MSE"
-  }
-  
+  y.leg <- "Average MSE"
   # Highlighted point can change based on how predictions were iterated
   highlight.leg <- "Chosen shrinkage value (s)"
   if (xvar == "step") {
@@ -710,11 +784,13 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   
   legend("topright", 
          legend = c(y.leg, 
-                    "Standard Error (SE)", 
-                    "1 SE above lowest mean MSE",
+                    "Standard Error (SE) range", 
+                    "1 SE above lowest avg. MSE",
                     highlight.leg),
          pch = c(16, NA, NA, 15),
          col = c(colors()[258], 1, 1, "red"),
-         cex = 1.1,
+         cex = 1,
          lty = c(1, 1, 2, NA))
+  
+  return(list(xvar.1se = svec[mse.1se.idx]))
 }
