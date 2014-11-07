@@ -239,7 +239,7 @@ only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.
 temps.scaled <- scale(temps) # Use scale(...) to z-score
 
 # Visualize after z-score
-pairs(cbind(kwh.logtransformed, temps.scaled))
+pairs(cbind(kwh.logtransformed, temps.scaled[,1:5]))
 lasso1 <- lars(x = temps.scaled, 
                y = kwh.logtransformed,
                type = 'lasso',
@@ -363,7 +363,8 @@ pretou.main.design <- pretou.main.design[,-1] # Trim off intercept
 step.1se <- PlotLassoCrossValidation(design.mat = pretou.main.design, 
                                 y.vec = kwh.pretou.logtransformed, 
                                 k = 10, 
-                                backtransform.mse = "log",
+                                backtransform.mse = "log", 
+                                rmse = TRUE,
                                 xvar = "step")
 
 lasso4 <- lars(x = pretou.main.design, 
@@ -378,6 +379,20 @@ degf.1se <- unlist(step.1se, use.names = FALSE) + 1
 PlotLasso(lars.obj = lasso4, y = kwh.pretou.logtransformed, 
           design.mat = pretou.main.design, xvar = "degf", 
           term.labels = "catleg", line.marker = "1se", xvar.parsimonious = degf.1se)
+
+# lasso4.cv <- cv.glmnet(x = pretou.main.design, 
+#                        y = kwh.pretou.logtransformed,
+#                        family = "gaussian")
+# plot(x = lasso4.cv)
+# 
+# 
+# lasso4.glmnet <- glmnet(x = pretou.main.design, 
+#                         y = kwh.pretou.logtransformed,
+#                         family = "gaussian")
+# plot(x = lasso4.glmnet,
+#      xvar = "dev",
+#      label = TRUE)
+
 
 lasso5 <- lars(x = pretou.main.design, 
                y = kwh.pretou.logtransformed,
@@ -396,18 +411,11 @@ for (i in 1:length(lasso5$actions)) {
   print(names(lasso5$actions[[i]]))
 }
 
-# lasso4.cv <- cv.glmnet(x = pretou.main.design, 
-#                        y = kwh.pretou.logtransformed,
-#                        family = "gaussian")
-# plot(x = lasso4.cv,
-#      sign.lambda = -1)
-# 
-# 
-# lasso4.glmnet <- glmnet(x = pretou.main.design, 
-#                        y = kwh.pretou.logtransformed,
-#                        family = "gaussian")
-# plot(x = lasso4.glmnet,
-#      xvar = "dev",
-#      label = TRUE)
-# 
-# 
+
+# CV over more data
+lasso6.step.1se <- PlotLassoCrossValidation(design.mat = twoway.nointertemp.design, 
+                                            y.vec = kwh.logtransformed,
+                                            k = 10, 
+                                            backtransform.mse = "log", 
+                                            rmse = TRUE,
+                                            xvar = "step")

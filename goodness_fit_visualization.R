@@ -623,6 +623,7 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
 
 PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10, 
                                      backtransform.mse = "none",
+                                     rmse = FALSE,
                                      xvar = "shrinkage") {
   # Args:
   #   design.mat: Design matrix suitable to be passed to LARS for LASSO
@@ -630,13 +631,24 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   #   k: The number of folds in k-folds cross-validation
   #   backtransform.mse: The type of backtransformation to apply to MSE (if any)
   #                      must be a value of c("none", "log"). The default is 
-  #                      "none".
+  #                      "none". "log" backtransforms a log transformation of
+  #                      response variable.
+  #   rmse : Should MSE be converted to root mean square error? Default is 
+  #          FALSE.
   #   xvar: The variable to plot on the x-axis, must be a value of 
   #         c("shrinkage", "step"). The default is "shrinkage".
   #
   # Return:
   #   The parsimonious value chosen from the x-axis, within 1 standard error 
   #   of optimal value chosen during cross-validation.
+  set.seed(89060)
+  
+  # turn off clipping and add margins (b, l, t, r)
+  if (backtransform.mse == "log.watthrs") {
+    par(xpd = FALSE, mar = c(7, 7, 3, 1), mgp = c(5.5, 1, 0))
+  } else {
+    par(xpd = FALSE, mar = c(4.5, 4.5, 3, 1), mgp = c(3.25, 1, 0))
+  }
   
   # Generate a vector of holdout labels, vector same length as number of rows 
   # in the dataset. Values of holdout labels will be on the range 1-k
@@ -685,25 +697,47 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
     for(j in 1:J) {
       # This computes MSE
       if (backtransform.mse == "log") {
-        predtrain.backtranformed <- exp(predtrain1[[i]][,j])
-        train.backtransformed <- exp(y.vec[cvlab==i])
-        MSEstore1[j,i] <- mean((predtrain.backtranformed - train.backtransformed)^2)
+        predtrain.resp <- exp(predtrain1[[i]][,j])
+        train.resp <- exp(y.vec[cvlab==i])
+        MSEstore1[j,i] <- mean((predtrain.resp - train.resp)^2)
       } else {
-        predtrain.backtranformed <- predtrain1[[i]][,j]
-        train.backtransformed <- y.vec[cvlab==i]
-        MSEstore1[j,i] <- mean((predtrain.backtranformed - train.backtransformed)^2)
+        predtrain.resp <- predtrain1[[i]][,j]
+        train.resp <- y.vec[cvlab==i]
+        MSEstore1[j,i] <- mean((predtrain.resp - train.resp)^2)
       }
     }
   }
   
   # Compute mean and standard error of the observed MSEs at J values
-  meanMSE <- apply(MSEstore1, 1, mean)
-  stdMSE <- apply(MSEstore1, 1, sd)/sqrt(k)
+  meanMSE <- apply(X = MSEstore1, 
+                   MARGIN = 1, # rows
+                   FUN = mean)
+  stdMSE <- apply(X = MSEstore1, 
+                  MARGIN = 1, # rows
+                  FUN = sd)/sqrt(k)
+  
+  # If RMSE is requested, take sqrt of MSE
+  if (rmse == TRUE) {
+    meanMSE <- sqrt(meanMSE)
+    stdMSE <- sqrt(stdMSE)
+  }
   
   # y label can change based on whether its backtransformed
-  y.label <- "Mean Square Error (MSE)"
-  if (backtransform.mse == "log") {
-    y.label <- "Backtransformed Mean Square Error (MSE)"
+  mse.rmse.abrv <- "MSE"
+  mse.rmse.text <- "Mean Square Error"
+  if (rmse == TRUE) {
+    mse.rmse.abrv <- "RMSE"
+    mse.rmse.text <- "Root Mean Square Error"
+  }
+  y.label <- paste0(mse.rmse.text, " (", mse.rmse.abrv, ")")
+  if (backtransform.mse == "log" & rmse == FALSE) {
+    y.label <- paste("Backtransformed", y.label)
+  } else if (backtransform.mse == "log" & rmse == TRUE) {
+    y.label <- paste("Average Backtransformed", mse.rmse.text, "(kWh)")
+  } else if (backtransform.mse == "none" & rmse == TRUE) {
+    y.label <- paste("Average", mse.rmse.text, "[log(kWh)]")
+  } else {
+    y.label <- paste("Average", y.label)
   }
   
   # x label can change based on how predictions were iterated
@@ -775,7 +809,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
          pch = 15, 
          cex = 1.3) 
   
-  y.leg <- "Average MSE"
+  y.leg <- paste("Average", mse.rmse.abrv)
   # Highlighted point can change based on how predictions were iterated
   highlight.leg <- "Chosen shrinkage value (s)"
   if (xvar == "step") {
@@ -785,7 +819,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   legend("topright", 
          legend = c(y.leg, 
                     "Standard Error (SE) range", 
-                    "1 SE above lowest avg. MSE",
+                    paste("1 SE above lowest avg.", mse.rmse.abrv),
                     highlight.leg),
          pch = c(16, NA, NA, 15),
          col = c(colors()[258], 1, 1, "red"),
