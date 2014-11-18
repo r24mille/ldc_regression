@@ -40,10 +40,109 @@ model.readings.glm.presegment <- glm(log(kwh)~ month + hrstr + weekend + price +
 seg <- segmented(obj = model.readings.glm.presegment, 
                  seg.Z = ~ temperature,
                  psi = list(temperature = c(18)))
+
+# plot(seg, 
+#      res=TRUE, 
+#      res.col = rgb(0, 0, 0, 10, maxColorValue=100),
+#      pch = 16,
+#      main = "Piecewise Linear Fit with Temperature Breakpoint",
+#      xlab = "Summer Temperatures (Celsius)",
+#      ylab = "Effect of Temperature",
+#      col = "red",
+#      lwd = 2)
+
 temperature.break <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
 readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
                                              readings.aggregate$temperature - temperature.break, 
                                              0)
+
+plot(y = readings.aggregate$kwh,
+     x = readings.aggregate$temp_over_break,
+     col = rgb(0, 0, 0, 20, maxColorValue=100),
+     pch = 16,
+     main = "Average Household Demand as a Function of Current Degrees>Breakpoint",
+     ylab = "Average Household Demand (kWh)",
+     xlab = "Current Degrees>Breakpoint (Celsius)")
+
+# Geometric mean of past temperatures
+for(n in 1:5) {
+  temps.geometricmean.order.natural <- rep(1, nrow(readings.aggregate))
+  temps.geometricmean.order.correlation <- rep(1, nrow(readings.aggregate))
+  temp.correlation.order <- c(2, 3, 1, 4, 0)
+  for(j in 1:n) {
+    for(i in 1:nrow(readings.aggregate)) {
+      # If index of past reading is greater than 0, use it... otherwise insert 0
+      ifelse(i-j+1 > 0,
+             temps.geometricmean.order.natural[i] <- temps.geometricmean.order.natural[i] * readings.aggregate[i-j+1,]$temp_over_break,
+             temps.geometricmean.order.natural[i] <- 0)
+      
+      # If index of past reading is greater than 0, use it... otherwise insert 0
+      ifelse(i-temp.correlation.order[j] > 0, 
+             temps.geometricmean.order.correlation[i] <- temps.geometricmean.order.correlation[i] * readings.aggregate[i - temp.correlation.order[j],]$temp_over_break,
+             temps.geometricmean.order.correlation[i] <- 0)
+    }
+  }
+  
+  temps.geometricmean.order.natural <- temps.geometricmean.order.natural ^ (1/n)
+  temps.geometricmean.order.correlation <- temps.geometricmean.order.correlation ^ (1/n)
+  
+  plot(y = readings.aggregate$kwh,
+       x = temps.geometricmean.order.natural,
+       col = rgb(0, 0, 0, 20, maxColorValue=100),
+       pch = 16,
+       main = paste0("Geometric Mean of Past Degrees>Breakpoint (n=", n, ")"),
+       ylab = "Average Household Demand (kWh)",
+       xlab = "Geometric Mean of Past Degrees>Breakpoint")
+  
+  plot(y = readings.aggregate$kwh,
+       x = temps.geometricmean.order.correlation,
+       col = rgb(0, 0, 0, 20, maxColorValue=100),
+       pch = 16,
+       main = paste0("Geometric Mean of Past Degrees>Breakpoint, Ordered by Correlation (n=", n, ")"),
+       ylab = "Average Household Demand (kWh)",
+       xlab = "Geometric Mean of Past Degrees>Breakpoint, Ordered According to Correlation with Residuals")
+}
+
+# Aritmetic mean of past temperatures
+for(n in 1:5) {
+  temps.arithmean.order.natural <- rep(0, nrow(readings.aggregate))
+  temps.arithmean.order.correlation <- rep(0, nrow(readings.aggregate))
+  temp.correlation.order <- c(2, 3, 1, 4, 0)
+  for(j in 1:n) {
+    for(i in 1:nrow(readings.aggregate)) {
+      # If index of past reading is greater than 0, add it
+      if (i-j+1 > 0) {
+             temps.arithmean.order.natural[i] <- temps.arithmean.order.natural[i] + readings.aggregate[i-j+1,]$temperature
+      }
+      
+      # If index of past reading is greater than 0, add it
+      if (i-temp.correlation.order[j] > 0) {
+             temps.arithmean.order.correlation[i] <- temps.arithmean.order.correlation[i] + readings.aggregate[i - temp.correlation.order[j],]$temperature
+      }
+    }
+  }
+  
+  temps.arithmean.order.natural <- temps.arithmean.order.natural / n
+  temps.arithmean.order.correlation <- temps.arithmean.order.correlation / n
+  
+  plot(y = readings.aggregate$kwh,
+       x = temps.arithmean.order.natural,
+       col = rgb(0, 0, 0, 20, maxColorValue=100),
+       pch = 16,
+       main = paste0("Arithmetic Mean of Past Temperature (n=", n, ")"),
+       ylab = "Average Household Demand (kWh)",
+       xlab = "Arithmetic Mean of Past Temperature")
+  
+  plot(y = readings.aggregate$kwh,
+       x = temps.arithmean.order.correlation,
+       col = rgb(0, 0, 0, 20, maxColorValue=100),
+       pch = 16,
+       main = paste0("Arithmetic Mean of Past Temperature, Ordered by Correlation (n=", n, ")"),
+       ylab = "Average Household Demand (kWh)",
+       xlab = "Arithmetic Mean of Past Temperature, Ordered According to Correlation with Residuals")
+}
+
+
 
 ##
 # Find the optimal number of hours lag, and the best method for incorporating 
@@ -137,7 +236,7 @@ FormulaStringNoInterTemperatureInteractions <- function(df.readings,
   return(frmla.str)
 }
 frmla.str.no.intertemp.interac <- FormulaStringNoInterTemperatureInteractions(df.readings = readings.trimmed,
-                                                                             matrix.temps = temps)
+                                                                              matrix.temps = temps)
 
 FormulaStringOnlyCategoricalInteractions<- function(df.readings, 
                                                     matrix.temps,
@@ -186,7 +285,6 @@ FormulaStringOnlyMainEffects <- function(df.readings,
 }
 frmla.str.only.main.effects <- FormulaStringOnlyMainEffects(df.readings = readings.trimmed,
                                                             matrix.temps = temps)
-
 
 
 #readings.aggregate <- cbind(readings.aggregate, temps)
@@ -239,7 +337,7 @@ only.category.interac.designmatrix <- model.matrix(object = frmla.only.category.
 temps.scaled <- scale(temps) # Use scale(...) to z-score
 
 # Visualize after z-score
-pairs(cbind(kwh.logtransformed, temps.scaled[,1:5]))
+#pairs(cbind(kwh.logtransformed, temps.scaled[,1:5]))
 lasso1 <- lars(x = temps.scaled, 
                y = kwh.logtransformed,
                type = 'lasso',
@@ -347,25 +445,25 @@ temps.pretou.scaled <- scale(temps.pretou)
 kwh.pretou.logtransformed <- log(pretou.trimmed$kwh)
 
 pretou.main.str <- FormulaStringOnlyMainEffects(df.readings = pretou.categorical.main,
-                             matrix.temps = temps.pretou,
-                             incl.y = FALSE)
+                                                matrix.temps = temps.pretou,
+                                                incl.y = FALSE)
 pretou.main.str <- paste("~", pretou.main.str, collapse = " ")
 
 pretou.main.scaletemp <- cbind(pretou.categorical.main, as.data.frame(temps.pretou.scaled))
 pretou.main.design <- model.matrix(formula(pretou.main.str),
-                                          data = pretou.main.scaletemp,
-                                          contrasts.arg = lapply(pretou.main.scaletemp[,sapply(pretou.main.scaletemp, is.factor)], 
-                                                                 contrasts, 
-                                                                 contrasts=FALSE))
+                                   data = pretou.main.scaletemp,
+                                   contrasts.arg = lapply(pretou.main.scaletemp[,sapply(pretou.main.scaletemp, is.factor)], 
+                                                          contrasts, 
+                                                          contrasts=FALSE))
 pretou.main.design <- pretou.main.design[,-1] # Trim off intercept
 
 # Stitch together categorical and continuous (scaled) variables for LASSO
 step.1se <- PlotLassoCrossValidation(design.mat = pretou.main.design, 
-                                y.vec = kwh.pretou.logtransformed, 
-                                k = 10, 
-                                backtransform.mse = "log", 
-                                rmse = TRUE,
-                                xvar = "step")
+                                     y.vec = kwh.pretou.logtransformed, 
+                                     k = 10, 
+                                     backtransform.mse = "log", 
+                                     rmse = TRUE,
+                                     xvar = "step")
 
 lasso4 <- lars(x = pretou.main.design, 
                y = kwh.pretou.logtransformed,
@@ -406,11 +504,6 @@ PlotLasso(lars.obj = lasso5, y = kwh.pretou.logtransformed,
           design.mat = pretou.main.design, xvar = "degf", 
           term.labels = "catleg", line.marker = "1se", xvar.parsimonious = degf.1se)
 
-# Order that terms were added
-for (i in 1:length(lasso5$actions)) {
-  print(names(lasso5$actions[[i]]))
-}
-
 
 # CV over more data
 lasso6.step.1se <- PlotLassoCrossValidation(design.mat = twoway.nointertemp.design, 
@@ -419,3 +512,19 @@ lasso6.step.1se <- PlotLassoCrossValidation(design.mat = twoway.nointertemp.desi
                                             backtransform.mse = "log", 
                                             rmse = TRUE,
                                             xvar = "step")
+
+lasso6 <- lars(x = twoway.nointertemp.design, 
+               y = kwh.logtransformed,
+               type = 'lasso',
+               trace = TRUE,
+               normalize = TRUE,
+               intercept = TRUE,
+               max.steps = unlist(lasso6.step.1se, use.names = FALSE))
+
+for (i in 1:length(lasso6$actions)) {
+  print(names(lasso6$actions[[i]]))
+}
+
+PlotLasso(lars.obj = lasso6, y = kwh.logtransformed, 
+          design.mat = twoway.nointertemp.design, xvar = "degf", 
+          term.labels = "catleg", line.marker = "1se", xvar.parsimonious = lasso6.step.1se)

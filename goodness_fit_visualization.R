@@ -1,5 +1,6 @@
 library(rgl) # OpenGL functionality in R for better 3D plots
 library(reshape) # Reshape data.frame for the heatmap
+library(ggplot2)
 
 PlotRegSubSets <- function (bics, adjr2s, title) {
   # Plot results from reg_subset in Bayesian Model Averaging (BMA) package.
@@ -483,13 +484,18 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
   }
   
   # Set up line colors
-  col.lines <- rep("black", ncol(design.mat))
+  col.month <- rgb(228,26,28, 255, maxColorValue=255)
+  col.hrstr <- rgb(55,126,184, 255, maxColorValue=255)
+  col.weekend <- rgb(77,175,74, 255, maxColorValue=255)
+  col.templag <- rgb(152,78,163, 255, maxColorValue=255)
+  col.price <- rgb(255,127,0, 255, maxColorValue=255)
+  col.interaction <- rgb(150,150,150, 175, maxColorValue=255)
+  
+  # Interaction will kind of be the "else" color
+  col.lines <- rep(col.interaction, ncol(design.mat)) 
   leg.labels <- list()
   if (term.labels == "catleg") {
-    col.month <- "red"
-    col.hrstr <- "blue"
-    col.weekend <- "green"
-    col.templag <- "orange"
+
     
     colnames.design.mat <- colnames(design.mat)
     indeces.term.month <- grep("^monthm[[:digit:]]*$", colnames.design.mat, 
@@ -499,6 +505,8 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
     indeces.term.weekend <- grep("^weekend[[:alpha:]]*$", colnames.design.mat, 
                                  perl = TRUE, value = FALSE)
     indeces.term.templag <- grep("^templag[[:digit:]]*$", colnames.design.mat, 
+                                 perl = TRUE, value = FALSE)
+    indeces.term.price <- grep("^price[[:alpha:]_]*$", colnames.design.mat, 
                                  perl = TRUE, value = FALSE)
     
     col.lines[indeces.term.month] <- col.month
@@ -517,6 +525,11 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
     if(length(indeces.term.templag) > 0) {
       leg.labels["Temperature History"] <- col.templag
     }
+    col.lines[indeces.term.price] <- col.price
+    if(length(indeces.term.price) > 0) {
+      leg.labels["Price"] <- col.price
+    }
+    leg.labels["Interaction"] <- col.interaction
   }
   
   # Create convenient variables for coefficients to be used on y-axis
@@ -562,6 +575,11 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
     xvar.label <- "Degrees of Freedom in Model"
     xvar.lim <- c(degf.min, degf.max)
     xvar.at <- seq(degf.min, degf.max, floor(degf.rng/10))
+    
+    # Make sure the upper limit is also last tick
+    if (tail(xvar.at, n=1) != degf.max) {
+      xvar.at <- c(xvar.at, c(degf.max)) 
+    }
   }
 
   plot(x = xvar.values,
@@ -644,11 +662,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   set.seed(89060)
   
   # turn off clipping and add margins (b, l, t, r)
-  if (backtransform.mse == "log.watthrs") {
-    par(xpd = FALSE, mar = c(7, 7, 3, 1), mgp = c(5.5, 1, 0))
-  } else {
-    par(xpd = FALSE, mar = c(4.5, 4.5, 3, 1), mgp = c(3.25, 1, 0))
-  }
+  par(xpd = FALSE, mar = c(4.5, 4.5, 3, 1), mgp = c(3.25, 1, 0))
   
   # Generate a vector of holdout labels, vector same length as number of rows 
   # in the dataset. Values of holdout labels will be on the range 1-k
@@ -663,18 +677,18 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   J <- length(svec) # How many versions of s did I decide to use?
   
   # Going to perform LASSO k times, create a list of k LARS result objects
-  lassolist1 <- list()
+  lassolist <- list()
   
   # Initialize a list to store prediction from each LASSO set
-  predtrain1 <- list()
+  predtrain <- list()
   
   # Compute MSE from predictions
-  MSEstore1 <- matrix(NA, J, k) # J values of s (rows), k hold-out sets (columns)
+  MSEstore <- matrix(NA, J, k) # J values of s (rows), k hold-out sets (columns)
   
   # Use a for loop to get each lasso fit holding out the ith set
   # Then predict the ith set using the holdout model
   for (i in 1:k) {
-    lassolist1[[i]] <- lars(x = design.mat[cvlab!=i,], 
+    lassolist[[i]] <- lars(x = design.mat[cvlab!=i,], 
                             y = y.vec[cvlab!=i],
                             type = 'lasso',
                             trace = FALSE,
@@ -685,7 +699,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
     } else {
       pred.mode = "fraction"
     }
-    predtrain1[[i]] <- predict.lars(object = lassolist1[[i]],
+    predtrain[[i]] <- predict.lars(object = lassolist[[i]],
                                     newx = design.mat[cvlab == i,], 
                                     s = svec,
                                     mode = pred.mode,
@@ -697,22 +711,22 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
     for(j in 1:J) {
       # This computes MSE
       if (backtransform.mse == "log") {
-        predtrain.resp <- exp(predtrain1[[i]][,j])
+        predtrain.resp <- exp(predtrain[[i]][,j])
         train.resp <- exp(y.vec[cvlab==i])
-        MSEstore1[j,i] <- mean((predtrain.resp - train.resp)^2)
+        MSEstore[j,i] <- mean((predtrain.resp - train.resp)^2)
       } else {
-        predtrain.resp <- predtrain1[[i]][,j]
+        predtrain.resp <- predtrain[[i]][,j]
         train.resp <- y.vec[cvlab==i]
-        MSEstore1[j,i] <- mean((predtrain.resp - train.resp)^2)
+        MSEstore[j,i] <- mean((predtrain.resp - train.resp)^2)
       }
     }
   }
   
   # Compute mean and standard error of the observed MSEs at J values
-  meanMSE <- apply(X = MSEstore1, 
+  meanMSE <- apply(X = MSEstore, 
                    MARGIN = 1, # rows
                    FUN = mean)
-  stdMSE <- apply(X = MSEstore1, 
+  stdMSE <- apply(X = MSEstore, 
                   MARGIN = 1, # rows
                   FUN = sd)/sqrt(k)
   
@@ -746,6 +760,9 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
     x.label <- "LASSO Step"
   }
   
+  # Set up colors
+  col.std <- rgb(60, 60, 60, 100, maxColorValue=100)
+  
   # Plot the change in MSE as shrinkage factor increases. Error bars established 
   # by kfolds cross-validation.
   mse.lwr <- min(meanMSE) - max(stdMSE)
@@ -753,7 +770,9 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   plot(x = svec, 
        y = meanMSE, 
        ylim = c(mse.lwr, mse.upr), 
-       pch = 16, 
+       type = "l", # lines
+       lwd = 2, # line width
+       # pch = 16, 
        col = colors()[258], 
        axes = FALSE, 
        xlab = x.label,
@@ -765,6 +784,11 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   if (xvar == "step") {
     svec.rng <- (max(svec) - min(svec))
     xvar.at <- seq(min(svec), max(svec), ceiling(svec.rng / 10))
+    
+    # Make sure the upper limit is also last tick
+    if (tail(xvar.at, n=1) != max(svec)) {
+      xvar.at <- c(xvar.at, c(max(svec))) 
+    }
   } else {
     svec.rng <- (max(svec) - min(svec))
     xvar.at <- seq(min(svec), max(svec), round((svec.rng / 10), 2))
@@ -777,23 +801,37 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
                 round(mse.upr, 2), 
                 round(((mse.upr - mse.lwr)/15), 2)), 
        cex.axis = 1)
-  lines(x = svec, 
-        y = meanMSE, 
-        lty = 1, 
-        col = colors()[258])
+#   lines(x = svec, 
+#         y = meanMSE, 
+#         lty = 1, 
+#         col = colors()[258])
   
-  # Standard error interval
-  for (i in 1:J) {
-    arrows(x0 = svec[i], 
-           y0 = (meanMSE[i] - stdMSE[i]), 
-           x1 = svec[i], 
-           y1 = (meanMSE[i] + stdMSE[i]), 
-           angle = 90, 
-           code = 3, # Arrow head at both ends of the bar
-           length=0.05, # Shorten up the bar
-           col = "black", 
-           lty = 1)
-  }
+#   # Standard error interval
+#   for (i in 1:J) {
+#     arrows(x0 = svec[i], 
+#            y0 = (meanMSE[i] - stdMSE[i]), 
+#            x1 = svec[i], 
+#            y1 = (meanMSE[i] + stdMSE[i]), 
+#            angle = 90, 
+#            code = 3, # Arrow head at both ends of the bar
+#            length=0.05, # Shorten up the bar
+#            col = "black", 
+#            lty = 1)
+#   }
+
+  lines(x = svec,
+        y = meanMSE - stdMSE,
+        lty = 1,
+        col = col.std,
+        lwd = 1
+    )
+
+  lines(x = svec,
+        y = meanMSE + stdMSE,
+        lty = 1,
+        col = col.std,
+        lwd = 1
+  )
   
   mse.min.idx <- which.min(meanMSE)
   mse.min.std <- stdMSE[mse.min.idx]
@@ -821,9 +859,10 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
                     "Standard Error (SE) range", 
                     paste("1 SE above lowest avg.", mse.rmse.abrv),
                     highlight.leg),
-         pch = c(16, NA, NA, 15),
-         col = c(colors()[258], 1, 1, "red"),
+         pch = c(NA, NA, NA, 15),
+         col = c(colors()[258], col.std, 1, "red"),
          cex = 1,
+         lwd = c(2, 1, 1, NA),
          lty = c(1, 1, 2, NA))
   
   return(list(xvar.1se = svec[mse.1se.idx]))

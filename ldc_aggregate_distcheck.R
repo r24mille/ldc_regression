@@ -32,7 +32,7 @@ qqPlot(x = log(readings.aggregate$kwh),
                      ", SD=",
                      round(sd(readings.aggregate$kwh), 1),
                      ")"),
-       ylab = "Average Reading (kWh) for Aggregate")
+       ylab = "Average log(kWh) for Aggregate")
 
 # Fit a reference Gamma distribution to the data
 gamma.fit <- fitdistr(readings.aggregate$kwh, "gamma")
@@ -78,6 +78,11 @@ rlnorm.sample <- rlnorm(n = length(readings.aggregate$kwh),
 # Plot the probability density function of the real and Normal distribution
 par(mfrow=c(1,1))
 kdbw = 0.25
+width.line = 2
+color.kwh = rgb(228,26,28, 255, maxColorValue=255)
+color.norm = rgb(55,126,184, 255, maxColorValue=255)
+color.gamma = rgb(77,175,74, 255, maxColorValue=255)
+color.lnorm = rgb(152,78,163, 255, maxColorValue=255)
 plot(density(readings.aggregate$kwh, bw = kdbw), 
      xlim = c(0,5), 
      xlab = paste0("Average Meter Reading (kWh, n=", 
@@ -87,19 +92,24 @@ plot(density(readings.aggregate$kwh, bw = kdbw),
      ylab = paste0("Kernel Density (bandwidth=",
                    kdbw,
                    ")"),
-     main = "Density of Observations, Gaussian, and Gamma Distributions",
-     col="red")
+     main = "Density of Observations and Probability Distributions",
+     lwd = width.line,
+     col = color.kwh)
 lines(density(rnorm.sample, bw = kdbw), 
-      col="blue")
+      lwd = width.line,
+      col = color.norm)
 lines(density(rgamma.sample, bw = kdbw), 
-      col="green")
+      lwd = width.line,
+      col = color.gamma)
 lines(density(rlnorm.sample, bw = kdbw),
-      col="pink")
+      lwd = width.line,
+      col = color.lnorm)
 legend("topright",
-       col = c("red", "blue", "green", "pink"), 
+       col = c(color.kwh, color.lnorm, color.gamma, color.norm), 
        lty = 1, 
+       lwd = width.line, 
        legend=c( "Observed Meter Readings", 
-                 as.expression(bquote(paste("Gaussian Distribution (",
+                 as.expression(bquote(paste("Log-Normal Distribution (",
                                             mu == .(mean.rounded),
                                             ", ",
                                             sigma^2 == .(sd.rounded),
@@ -109,4 +119,8 @@ legend("topright",
                                             ", ",
                                             beta == .(round(gamma.rate, 1)),
                                             ")     "))),
-                 "Log-Normal Distribution"))
+                 as.expression(bquote(paste("Normal Distribution (",
+                                            mu == .(mean.rounded),
+                                            ", ",
+                                            sigma^2 == .(sd.rounded),
+                                            ")     ")))))
