@@ -569,7 +569,7 @@ PlotLasso <- function(lars.obj, y, design.mat, xvar = "shrinkage",
   } else if (xvar == "degf") {
     degf.min <- min(lars.obj$df)
     degf.max <- max(lars.obj$df)
-    degf.rng <- degf.max - degf.min
+    degf.rng <- degf.max - degf.min + 1
     
     xvar.values <- lars.obj$df
     xvar.label <- "Degrees of Freedom in Model"
@@ -838,6 +838,7 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
   mse.1se.idx <- which(meanMSE < (min(meanMSE) + mse.min.std))[1]
   mse.1se <- meanMSE[mse.1se.idx]
   # 1SE threshold line
+  print(min(meanMSE) + mse.min.std)
   abline(h = (min(meanMSE) + mse.min.std), 
          lty = 2)
   # Selected shrinkage value
@@ -865,5 +866,5 @@ PlotLassoCrossValidation <- function(design.mat, y.vec, k = 10,
          lwd = c(2, 1, 1, NA),
          lty = c(1, 1, 2, NA))
   
-  return(list(xvar.1se = svec[mse.1se.idx]))
+  return(list(xvar.1se = svec[mse.1se.idx], (min(meanMSE) + mse.min.std)))
 }

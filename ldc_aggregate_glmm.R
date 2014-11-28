@@ -21,7 +21,7 @@ source('glm_method_iteration.R')
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R/", 
-                   "full_aggregate_readings.csv")
+                   "full_aggregate_readings_summer_wunderground.csv")
 readings.aggregate <- read.csv(fpath)
 readings.aggregate <- InitAggregateReadings(readings.aggregate)
 
@@ -51,7 +51,7 @@ seg <- segmented(obj = model.readings.glm.presegment,
 #      col = "red",
 #      lwd = 2)
 
-temperature.break <- floor(seg$psi[1,2]) # TODO floor vs. round vs. real temps
+temperature.break <- seg$psi[1,2]
 readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
                                              readings.aggregate$temperature - temperature.break, 
                                              0)
@@ -363,11 +363,12 @@ predict.lars(object = lasso1,
              mode = "fraction",
              type = "fit")
 
-PlotLasso(lars.obj = lasso1, y = kwh.logtransformed, design.mat = temps.scaled,
-          xvar = "degf")
-
-PlotLassoCrossValidation(design.mat = temps.scaled, y.vec = kwh.logtransformed, 
+lasso1.step.1se <- PlotLassoCrossValidation(design.mat = temps.scaled, y.vec = kwh.logtransformed, 
                          k = 10, backtransform.mse = "log", xvar = "step")
+
+PlotLasso(lars.obj = lasso1, y = kwh.logtransformed, design.mat = temps.scaled,
+          xvar = "degf", term.labels = "catleg", line.marker = "1se", 
+          xvar.parsimonious = lasso1.step.1se)
 
 
 # 2nd iteration of LASSO method which includes contrasts of categorical 
@@ -490,6 +491,20 @@ PlotLasso(lars.obj = lasso4, y = kwh.pretou.logtransformed,
 # plot(x = lasso4.glmnet,
 #      xvar = "dev",
 #      label = TRUE)
+
+lasso4temponly <- lars(x = temps.pretou.scaled, 
+               y = kwh.pretou.logtransformed,
+               type = 'lasso',
+               trace = TRUE,
+               normalize = TRUE,
+               intercept = TRUE)
+
+lasso4temponly.step.1se <- PlotLassoCrossValidation(design.mat = temps.pretou.scaled, 
+                                     y.vec = kwh.pretou.logtransformed, 
+                                     k = 10, 
+                                     backtransform.mse = "log", 
+                                     rmse = TRUE,
+                                     xvar = "step")
 
 
 lasso5 <- lars(x = pretou.main.design, 

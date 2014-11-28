@@ -15,17 +15,20 @@ AddInferredInformation <- function(df) {
   df$hrstr <- paste0("h", df$hour)
   
   # Add yes/no weekend flag
-  df$weekend <- ifelse(df$tou_period %in% c("off_weekend"), "Yes", "No")
+  df$weekend <- ifelse(df$timestamp_dst$wday == 0 | df$timestamp_dst$wday == 6,
+                       "Yes",
+                       "No")
+  #df$weekend <- ifelse(df$tou_period %in% c("off_weekend"), "Yes", "No")
   
   # Add column which converts TOU Period to its price level
-  df$price <- readings.aggregate$tou_period
-  df$price <- gsub("off_weekend", "off_peak", df$price)
-  df$price <- gsub("off_morning", "off_peak", df$price)
-  df$price <- gsub("off_evening", "off_peak", df$price)
-  df$price <- gsub("mid_morning", "mid_peak", df$price)
-  df$price <- gsub("mid_evening", "mid_peak", df$price)
+  #df$price <- readings.aggregate$tou_period
+  #df$price <- gsub("off_weekend", "off_peak", df$price)
+  #df$price <- gsub("off_morning", "off_peak", df$price)
+  #df$price <- gsub("off_evening", "off_peak", df$price)
+  #df$price <- gsub("mid_morning", "mid_peak", df$price)
+  #df$price <- gsub("mid_evening", "mid_peak", df$price)
   # If TOU billing isn't active, then price is flat rate
-  df$price <- ifelse(df$billing_active %in% c("No"), "flat", df$price)
+  #df$price <- ifelse(df$billing_active %in% c("No"), "flat", df$price)
   
   return(df)
 }
@@ -72,15 +75,15 @@ OrderFactors <- function(df) {
   # 
   # Return: 
   #   The dataframe with corrected/ordered factors.
-  df$tou_period <- factor(df$tou_period, 
-                          c("off_weekend", "off_morning", "mid_morning", 
-                            "on_peak", "mid_evening", "off_evening"))
+  #df$tou_period <- factor(df$tou_period, 
+  #                        c("off_weekend", "off_morning", "mid_morning", 
+  #                          "on_peak", "mid_evening", "off_evening"))
   df$month <- factor(df$month, c("m5", "m6", "m7", "m8", "m9", "m10"))
   df$hrstr <- factor(df$hrstr, 
                      c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
                        "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
-  df$weekend <- factor(df$weekend, c("No", "Yes"))
+  #df$weekend <- factor(df$weekend, c("No", "Yes"))
   df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
   
   return(df)
