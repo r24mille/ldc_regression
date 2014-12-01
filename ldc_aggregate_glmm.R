@@ -59,7 +59,7 @@ readings.trimmed <- TrimExplanatoryVariables(readings.aggregate)
 Y.mat <- as.matrix(log(readings.trimmed[,1]))
 X.mat <- NumericFactorCodedMatrix(readings.trimmed[,-1])
 numlvl.vec <- NumberFactorLevels(readings.trimmed[,-1])
-lasso <- glinternet(X = X.mat, 
-                    Y = Y.mat, 
-                    numLevels = numlvl.vec, 
-                    family = "gaussian")
+cv.hglasso <- glinternet.cv(X = X.mat, 
+                            Y = Y.mat, 
+                            numLevels = numlvl.vec, 
+                            family = "gaussian")

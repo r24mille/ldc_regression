@@ -136,11 +136,11 @@ NumericFactorCodedMatrix <- function(df) {
   # Return:
   # The data.frame re-coded as a numeric matrix.
   numeric.m <- matrix(0, nrow = nrow(df), ncol = ncol(df))
-  #colnames(numeric.m) <- names(df)
+  colnames(numeric.m) <- names(df)
   
   for (i in 1:ncol(df)) {
     if (is.factor(df[,i])) {
-      numeric.m[,i] <- as.numeric(df[,i])
+      numeric.m[,i] <- as.numeric(df[,i]) - 1
     } else {
       numeric.m[,i] <- df[,i]
     }
