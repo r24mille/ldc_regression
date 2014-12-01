@@ -1,7 +1,7 @@
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R/", 
-                   "full_aggregate_readings.csv")
+                   "aggregate_readings_01Mar2011_through_17Oct2012.csv")
 readings.aggregate <- read.csv(fpath)
 
 # Convert the observation_timestamp column to Date

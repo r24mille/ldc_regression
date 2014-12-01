@@ -17,20 +17,42 @@ AddInferredInformation <- function(df) {
   # Add yes/no weekend flag
   df$weekend <- ifelse(df$timestamp_dst$wday == 0 | df$timestamp_dst$wday == 6,
                        "Yes",
-                       "No")
-  #df$weekend <- ifelse(df$tou_period %in% c("off_weekend"), "Yes", "No")
-  
-  # Add column which converts TOU Period to its price level
-  #df$price <- readings.aggregate$tou_period
-  #df$price <- gsub("off_weekend", "off_peak", df$price)
-  #df$price <- gsub("off_morning", "off_peak", df$price)
-  #df$price <- gsub("off_evening", "off_peak", df$price)
-  #df$price <- gsub("mid_morning", "mid_peak", df$price)
-  #df$price <- gsub("mid_evening", "mid_peak", df$price)
-  # If TOU billing isn't active, then price is flat rate
-  #df$price <- ifelse(df$billing_active %in% c("No"), "flat", df$price)
+                       "No")  
   
   return(df)
+}
+
+CreatePastTemperatureMatrix <- function(nlags, df.readings) {
+  # Creates a matrix of values such that each column looks an additional hour 
+  # into the past at degrees over the temperature breakpoint.
+  #
+  # Args:
+  #   nlags: The number of hours (ie. lags) to include in the matrix
+  #   df.readings: A dataframe of smart meter readings.
+  #
+  # Returns:
+  #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
+  #   own coefficient when modelled.
+  lagnames <- c(paste0("overbreak_lag", c(0:nlags)),
+                paste0("underbreak_lag", c(0:nlags)))
+  templags <- matrix(nrow = nrow(df.readings),
+                     ncol = (2 * (nlags + 1)))
+  colnames(templags) <- lagnames
+  
+  # Unfortunately iterating over the dataframe seems to be the best method
+  for(i in 1:nrow(df.readings)) {
+    for(j in 0:nlags) {
+      if (i-j > 0) {
+        templags[i, (j+1)] <- df.readings[i-j, "temp_over_break"]
+        templags[i, (j+1+nlags+1)] <- df.readings[i-j, "temp_under_break"]
+      } else {
+        templags[i, (j+1)] <- 0
+        templags[i, (j+1+nlags+1)] <- 0
+      }
+    }
+  }
+  
+  return(templags)
 }
 
 FixDataTypes <- function(df) {
@@ -61,7 +83,6 @@ InitAggregateReadings <- function(df) {
   df <- FixDataTypes(df)
   df <- AddInferredInformation(df)
   df <- OrderFactors(df)
-  df <- StripNonexistantInteractions(df)
   
   return(df)
 }
@@ -78,70 +99,69 @@ OrderFactors <- function(df) {
   #df$tou_period <- factor(df$tou_period, 
   #                        c("off_weekend", "off_morning", "mid_morning", 
   #                          "on_peak", "mid_evening", "off_evening"))
-  df$month <- factor(df$month, c("m5", "m6", "m7", "m8", "m9", "m10"))
+  df$dayname <- factor(df$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
+                                     "Sat"))
+  df$month <- factor(df$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 
+                                 "m8", "m9", "m10", "m11", "m12"))
   df$hrstr <- factor(df$hrstr, 
                      c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
                        "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
-  #df$weekend <- factor(df$weekend, c("No", "Yes"))
+  df$weekend <- factor(df$weekend, c("No", "Yes"))
   df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
   
   return(df)
 }
 
-StripNonexistantInteractions <- function(df) {
-  # Manually create a column representing the two-way interaction between 
-  # several terms, with infeasible interaction between levels removed
-  # (eg. hrstrh23:priceon_peak or weekendYes:pricemid_peak).
-  #
-  # Args:
-  #   df: A smart meter reading data.frame
-  #
-  # Returns:
-  #   The data.frame with several columns added which represent certain two-way 
-  #   interactions. These special columns should not be considered as main 
-  #   effects nor interacted with any other terms. They _are_ the interaction.
-  
-  # Some htrstr and price combinations are infeasible
-  df$hrstr_price <- paste0(df$hrstr, df$price)
-  df$hrstr_price <- as.factor(df$hrstr_price)
-  
-  # Some weekend and price combinations are infeasible
-  df$wknd_price <- paste0(df$weekend, df$price)
-  df$wknd_price <- as.factor(df$wknd_price)
-  
-  return (df)
+TrimExplanatoryVariables <- function(df) {
+  # The dataframe formed from parsing the .csv file and manipulating past 
+  # temperature breakpoint information has several extra columns. Trim the 
+  # data.frame down to only those explanatory variables to be considered by the 
+  # model.
+  df.trimmed <- df[, ! colnames(df) %in% c("sample_index", 
+                                           "daynum", 
+                                           "hour", 
+                                           "timestamp_dst", 
+                                           "temperature", 
+                                           "agg_count", 
+                                           "temp_over_break",
+                                           "temp_under_break")]
+  return(df.trimmed)
 }
 
-AddAllCategoricalInteractions <- function(df) {
-  # Manuualy create a column representing the two-tway interaction between all
-  # categorical terms.
+NumericFactorCodedMatrix <- function(df) {
+  # Transforms an input data.frame to a matrix with factor levels represented 
+  # as numeric. Returned value is suitable for ?glinternet.
   #
-  # Args:
-  #   df: A smart meter reading data.frame
-  #
+  # Return:
+  # The data.frame re-coded as a numeric matrix.
+  numeric.m <- matrix(0, nrow = nrow(df), ncol = ncol(df))
+  #colnames(numeric.m) <- names(df)
+  
+  for (i in 1:ncol(df)) {
+    if (is.factor(df[,i])) {
+      numeric.m[,i] <- as.numeric(df[,i])
+    } else {
+      numeric.m[,i] <- df[,i]
+    }
+  }
+  
+  return(numeric.m)
+}
+
+NumberFactorLevels <- function(df) {
   # Returns:
-  #   The data.frame with several columns added which represent all two-way 
-  #   interactions between categorical variables.
+  # A vector in which each value represents the number of factor levels for 
+  # each column of df
+  numlevels <- rep(0, ncol(df))
   
-  # hrstr:price and weekend:price
-  df <- StripNonexistantInteractions(df)
+  for (i in 1:ncol(df)) {
+    if (is.factor(df[,i])) {
+      numlevels[i] <- nlevels(df[,i])
+    } else {
+      numlevels[i] <- 1
+    }
+  }
   
-  # month:hrstr
-  df$mnth_hrstr <- paste0(df$month, df$hrstr)
-  df$mnth_hrstr <- as.factor(df$mnth_hrstr)
-  
-  # month:weekend
-  df$mnth_wknd <- paste0(df$month, df$weekend)
-  df$mnth_wknd <- as.factor(df$mnth_wknd)
-  
-  # month:price
-  df$mnth_price <- paste0(df$month, df$price)
-  df$mnth_price <- as.factor(df$mnth_price)
-  
-  # hrstr:weekend
-  df$hrstr_wknd <- paste0(df$hrstr, df$weekend)
-  df$hrstr_wknd <- as.factor(df$hrstr_wknd)
-  
-  return(df)
+  return(numlevels)
 }

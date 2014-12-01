@@ -217,37 +217,6 @@ CreateCdhSum <- function(nlags, df.readings) {
   return(cdhvals)
 }
 
-
-CreatePastTemperatureMatrix <- function(nlags, df.readings) {
-  # Creates a matrix of values such that each column looks an additional hour 
-  # into the past at degrees over the temperature breakpoint.
-  #
-  # Args:
-  #   nlags: The number of hours (ie. lags) to include in the matrix
-  #   df.readings: A dataframe of smart meter readings.
-  #
-  # Returns:
-  #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
-  #   own coefficient when modelled.
-  lagnames <- paste0("templag", c(0:nlags))
-  templags <- matrix(nrow = nrow(df.readings),
-                     ncol = (nlags + 1))
-  colnames(templags) <- lagnames
-  
-  # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(df.readings)) {
-    for(j in 0:nlags) {
-      if (i-j > 0) {
-        templags[i, (j+1)] <- df.readings[i-j, "temp_over_break"]
-      } else {
-        templags[i, (j+1)] <- 0
-      }
-    }
-  }
-  
-  return(templags)
-}
-
 ForwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
                                             is.stopcriteria.bic = FALSE,
                                             pval.threshold = 0.05) {
