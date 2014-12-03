@@ -123,6 +123,10 @@ TrimExplanatoryVariables <- function(df) {
                                            "hour", 
                                            "timestamp_dst", 
                                            "temperature", 
+                                           "dewpoint_temp_c", 
+                                           "rel_humidity_pct", 
+                                           "wind_speed_kph", 
+                                           "visibility_km",
                                            "agg_count", 
                                            "temp_over_break",
                                            "temp_under_break")]
