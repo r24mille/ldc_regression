@@ -1,6 +1,9 @@
 library(segmented) # Find linear regression breakpoint
-library(ggplot) # Better plots!
+library(ggplot2) # Better plotting!
+library(scales) # For scaling axes (eg. datetime)
 library(glinternet) # Hierarchical group-LASSO variable selection
+library(car) # Companion to Applied Regression (better qqPlot)
+library(reshape2) # For reshaping (ie. melting) data
 
 # Source functions in other files
 source("dataframe_processing.R")
@@ -26,15 +29,15 @@ seg <- segmented(obj = model.readings.lm.presegment,
                  seg.Z = ~ temperature,
                  psi = 16)
 
-# plot(seg, 
-#      res=TRUE, 
-#      res.col = rgb(0, 0, 0, 10, maxColorValue=100),
-#      pch = 16,
-#      main = "Piecewise Linear Fit with Temperature Breakpoint",
-#      xlab = "Summer Temperatures (Celsius)",
-#      ylab = "Effect of Temperature",
-#      col = "red",
-#      lwd = 2)
+plot(seg, 
+     res = TRUE, 
+     res.col = rgb(0, 0, 0, 10, maxColorValue=100),
+     pch = 16,
+     main = "Piecewise Linear Fit with Temperature Breakpoint",
+     xlab = "Summer Temperatures (Celsius)",
+     ylab = "Effect of Temperature",
+     col = "red",
+     lwd = 2)
 
 temperature.break <- seg$psi[1,2]
 readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
@@ -55,6 +58,9 @@ temps <- CreatePastTemperatureMatrix(nlags = temp.hrs,
 readings.aggregate <- cbind(readings.aggregate, temps)
 rm(temps)
 readings.trimmed <- TrimExplanatoryVariables(readings.aggregate)
+# Don't include the first several rows due to missing past temperature info
+readings.trimmed <- tail(x= readings.trimmed, 
+                         n = nrow(readings.trimmed) - temp.hrs) 
 
 # Prep data into matrices for use in hierarchical group-lasso
 Y.mat <- as.matrix(log(readings.trimmed[,1]))
@@ -73,18 +79,20 @@ cont.colnames <- names(readings.trimmed[c(FALSE, numlvl.vec == 1)])
 coef.hglasso <- coef(cv.hglasso$glinternetFit)
 
 # Column names for main effects at chosen lambda
-lmda.idx <- which(cv.hglasso$lambda == cv.hglasso$lambdaHat1Std)
-me.colnames <- c(cat.colnames[coef.hglasso[[lmda.idx]]$mainEffects$cat],
-                 cont.colnames[coef.hglasso[[lmda.idx]]$mainEffects$cont])
-# Column names for interactions at chosen lambda
-lmda.catcat <- coef.hglasso[[lmda.idx]]$interactions$catcat
-lmda.contcont <- coef.hglasso[[lmda.idx]]$interactions$contcont
-lmda.catcont <- coef.hglasso[[lmda.idx]]$interactions$catcont
-int.colnames <- c(paste(cat.colnames[lmda.catcat[,1]], cat.colnames[lmda.catcat[,2]], sep=":"),
-                  paste(cont.colnames[lmda.contcont[,1]], cont.colnames[lmda.contcont[,2]], sep=":"),
-                  paste(cat.colnames[lmda.catcont[,1]], cont.colnames[lmda.catcont[,2]], sep=":"))
-c(me.colnames, int.colnames)
-
+#lmda.idx <- which(cv.hglasso$lambda == cv.hglasso$lambdaHat1Std)
+for (lmda.idx in 1:which(cv.hglasso$lambda == cv.hglasso$lambdaHat1Std)) {
+  me.colnames <- c(cat.colnames[coef.hglasso[[lmda.idx]]$mainEffects$cat],
+                     cont.colnames[coef.hglasso[[lmda.idx]]$mainEffects$cont])
+  # Column names for interactions at chosen lambda
+  lmda.catcat <- coef.hglasso[[lmda.idx]]$interactions$catcat
+  lmda.contcont <- coef.hglasso[[lmda.idx]]$interactions$contcont
+  lmda.catcont <- coef.hglasso[[lmda.idx]]$interactions$catcont
+  int.colnames <- c(paste(cat.colnames[lmda.catcat[,1]], cat.colnames[lmda.catcat[,2]], sep=":"),
+                    paste(cont.colnames[lmda.contcont[,1]], cont.colnames[lmda.contcont[,2]], sep=":"),
+                    paste(cat.colnames[lmda.catcont[,1]], cont.colnames[lmda.catcont[,2]], sep=":"))
+  print(paste("Lmabda Index =", lmda.idx))
+  print(c(me.colnames, int.colnames))
+}
 
 
 # Backtransform optimal, fitted values and compute more meaningful RMSE and MAPE
@@ -97,7 +105,6 @@ hglasso.residuals.bktr <- Y.bktr - hglasso.fitted.bktr
 hglasso.residuals <- Y.mat - cv.hglasso$fitted
 
 # QQ Plot of fitted vs. observed values
-library(car) # Companion to Applied Regression (better qqPlot)
 qqPlot(x = hglasso.residuals,
        distribution = "norm",
        envelope = .95,
@@ -118,15 +125,26 @@ axis(3, # top label
      at = round(mean(hglasso.residuals), 3))
 
 # Plot residuals to look for patterns
+readings.aggregate.tail <- tail(x = readings.aggregate, 
+                                n = nrow(readings.trimmed)) 
 hglasso.df.resids <- data.frame(hglasso.residuals, 
-                                readings.aggregate$timestamp_dst)
-names(hglasso.df.resids) <- c("res", "dst")
-ggresiduals <- (ggplot(hglasso.df.resids, aes(y = res, x = dst))
+                                readings.aggregate.tail$temperature,
+                                readings.aggregate.tail$agg_count, 
+                                X.mat[,1],
+                                X.mat[,2], 
+                                X.mat[,3],
+                                X.mat[,4],
+                                X.mat[,5],
+                                readings.aggregate.tail$timestamp_dst)
+names(hglasso.df.resids) <- c("residuals", "temperature", "aggregate_count", 
+                              "dayname", "holiday", "price", "month", "hour", 
+                              "time")
+ggresiduals <- (ggplot(hglasso.df.resids, aes(y = residuals, x = time))
                 + geom_point(alpha = 1/3)
                 + labs(x = "Date (hourly)", 
                        y = "Residuals of log(kWh)",
                        title= bquote(Residuals~of~Hierarchical~Group-LASSO~Model~at~hat(lambda)==.(cv.hglasso$lambdaHat, 2)))
-                + scale_x_datetime(labels = date_format("%b %Y"), 
+                + scale_x_datetime(labels = date_format(format = "%b %Y"), 
                                    breaks = "1 month")
                 + theme(axis.text.x = element_text(angle=90, 
                                                    vjust=0.5, 
@@ -134,3 +152,92 @@ ggresiduals <- (ggplot(hglasso.df.resids, aes(y = res, x = dst))
                         axis.text.y = element_text(size=12))
 )
 ggresiduals
+hglasso.df.resids.long <- melt(hglasso.df.resids, id.vars="time")
+ggresiduals.facet <- (ggplot() 
+                      + geom_point(data = subset(hglasso.df.resids.long, 
+                                                 variable == "residuals"), 
+                                   aes(time, value)) 
+                      + geom_line(data = subset(hglasso.df.resids.long, 
+                                                variable == "temperature"),
+                                  aes(time, value))
+                      + geom_step(data = subset(hglasso.df.resids.long, 
+                                                variable == "aggregate_count"), 
+                                  aes(time, value)) 
+                      + geom_step(data = subset(hglasso.df.resids.long, 
+                                                variable == "holiday"), 
+                                  aes(time, value)) 
+                      + facet_grid(variable ~ ., scales = "free_y")
+                      + labs(x = "Date (hourly)", 
+                             y = "Facet Value (see right-hand label)",
+                             title= "Residuals and Independent Variables of Interest")
+                      + scale_x_datetime(labels = date_format(format = "%b %Y"), 
+                                         breaks = "1 month")
+                      + theme(axis.text.x = element_text(angle=90, 
+                                                         vjust=0.5, 
+                                                         size=12),
+                              axis.text.y = element_text(size=12)))
+ggresiduals.facet
+
+# Plot pairs
+hglasso.df.pairs <- data.frame(hglasso.residuals, 
+                               readings.aggregate.tail$temperature,
+                               readings.aggregate.tail$agg_count, 
+                               readings.aggregate.tail$dayname,
+                               readings.aggregate.tail$holiday, 
+                               readings.aggregate.tail$price,
+                               readings.aggregate.tail$month,
+                               readings.aggregate.tail$hrstr,
+                               readings.aggregate.tail$timestamp_dst)
+names(hglasso.df.pairs) <- c("residuals", "temperature", "aggregate_count", 
+                             "dayname", "holiday", "price", "month", "hour", 
+                             "time")
+
+ggresiduals.pairs.temp <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                        x = temperature))
+                           + geom_point(alpha = 1/2)
+                           + labs(x = "Outdoor Temperature (Celsius)", 
+                                  y = "Residuals of log(kWh)",
+                                  title= "Residuals as a Function of Temperature"))
+ggresiduals.pairs.temp
+ggresiduals.pairs.agg <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                       x = aggregate_count))
+                          + geom_point(alpha = 1/2)
+                          + labs(x = "Number of Meters Used to Determine Aggregate Average", 
+                                 y = "Residuals of log(kWh)",
+                                 title= "Residuals as a Function of the Number of Meters Used to Determine the Aggregate Average Reading"))
+ggresiduals.pairs.agg
+ggresiduals.pairs.holiday <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                           x = holiday))
+                              + geom_boxplot()
+                              + labs(x = "Holiday (as observed by Ontario Energy Board)", 
+                                     y = "Residuals of log(kWh)",
+                                     title= "Residuals as a Function of Holidays"))
+ggresiduals.pairs.holiday
+ggresiduals.pairs.hour <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                        x = hour))
+                           + geom_boxplot()
+                           + labs(x = "Hour of Day", 
+                                  y = "Residuals of log(kWh)",
+                                  title= "Residuals as a Function of Hour-of-Day"))
+ggresiduals.pairs.hour
+ggresiduals.pairs.dayname <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                           x = dayname))
+                              + geom_boxplot()
+                              + labs(x = "Day of Week", 
+                                     y = "Residuals of log(kWh)",
+                                     title= "Residuals as a Function of Day-of-Week"))
+ggresiduals.pairs.dayname
+ggresiduals.pairs.month <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                         x = month))
+                            + geom_boxplot()
+                            + labs(x = "Month", 
+                                   y = "Residuals of log(kWh)",
+                                   title= "Residuals as a Function of Month-of-Year"))
+ggresiduals.pairs.month
+ggresiduals.pairs.price <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                         x = price))
+                            + geom_boxplot()
+                            + labs(x = "Electricity Pricing Category", 
+                                   y = "Residuals of log(kWh)",
+                                   title= "Residuals as a Function of Pricing Sturcture"))
+ggresiduals.pairs.price

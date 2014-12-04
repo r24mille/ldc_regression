@@ -128,6 +128,7 @@ TrimExplanatoryVariables <- function(df) {
                                            "wind_speed_kph", 
                                            "visibility_km",
                                            "agg_count", 
+                                           "weekend", 
                                            "temp_over_break",
                                            "temp_under_break")]
   return(df.trimmed)
