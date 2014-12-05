@@ -23,11 +23,11 @@ readings.aggregate <- InitAggregateReadings(readings.aggregate)
 #                breakpoints (ie. Two-Threshold Regression from Moral-Carcedo 
 #                et al.) but it does not converge. Looking at the plot, this 
 #                seems sensible that only a Switching Regression applies.
-model.readings.lm.presegment <- lm(log(kwh) ~ temperature, 
+model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + dayname + holiday, 
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 
                  seg.Z = ~ temperature,
-                 psi = 16)
+                 psi = 15)
 
 plot(seg, 
      res = TRUE, 
@@ -40,9 +40,13 @@ plot(seg,
      lwd = 2)
 
 temperature.break <- seg$psi[1,2]
+#temperature.exhaust <- seg$psi[2,2]
 readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
                                              readings.aggregate$temperature - temperature.break, 
                                              0)
+# Limit temp_over_break to the exhaustion point ~32C
+#readings.aggregate$temp_over_break <- sapply(readings.aggregate$temp_over_break, 
+#                                             function(x) min(x, temperature.exhaust - temperature.break))
 readings.aggregate$temp_under_break <- ifelse(readings.aggregate$temperature < temperature.break, 
                                               readings.aggregate$temperature - temperature.break, 
                                               0)
