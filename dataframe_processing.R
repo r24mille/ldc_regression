@@ -67,6 +67,10 @@ FixDataTypes <- function(df) {
   # Coerses timestamp_dst to the POSIX datetime type
   df$timestamp_dst <- as.POSIXlt(df$timestamp_dst)
   
+  # Enforce numeric column type on humidex and wind_chill
+  df$humidex <- as.numeric(df$humidex)
+  df$wind_chill <- as.numeric(df$wind_chill)
+  
   return(df)
 }
 
@@ -126,11 +130,19 @@ TrimExplanatoryVariables <- function(df) {
                                            "dewpoint_temp_c", 
                                            "rel_humidity_pct", 
                                            "wind_speed_kph", 
-                                           "visibility_km",
+                                           "visibility_km", 
+                                           "pressure_kpa",
+                                           "wind_chill",
+                                           "wind_chill_diff", 
                                            "agg_count", 
                                            "weekend", 
+                                           "humidex",
+                                           "humidex_diff",
                                            "temp_over_break",
-                                           "temp_under_break")]
+                                           "temp_under_break",
+                                           "nvgnt_thi",
+                                           "nvgnt_cool_thi",
+                                           "nvgnt_heat_thi")]
   return(df.trimmed)
 }
 
