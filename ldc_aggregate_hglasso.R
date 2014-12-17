@@ -15,6 +15,46 @@ fpath <- file.path(home,
                    "aggregate_readings_01Mar2011_through_17Oct2012.csv")
 readings.aggregate <- read.csv(fpath, 
                                na.strings=c("NULL", "NA", "NaN"))
+
+fpath2 <- file.path(home, 
+                   "../Dropbox/ISS4E/R/", 
+                   "weather_desc_01Mar2011_through_17Oct2012.csv")
+weather <- read.csv(fpath2)
+
+ReduceWeather <- function(df){
+  # Reduce the ~64 distinct combinations of weather terms to a set of 7 weather 
+  # terms. The most severe weather description is used for reduction.
+  #
+  # Args:
+  #   df: A dataframe with ef$weather_desc column
+  #
+  # Return:
+  # A vector of reduced weather descriptions corresponding to the indeces of 
+  # df$weather_desc.
+  weather_reduced <- rep(NA, nrow(df))
+  
+  for (i in 1:nrow(df)) {
+    if (grepl("Thunderstorms", df$weather_desc[i])) {
+      weather_reduced[i] <- "thunderstorms"
+    } else if (grepl("Ice|Freezing|Hail", df$weather_desc[i])) {
+      weather_reduced[i] <- "ice"
+    } else if (grepl("Snow", df$weather_desc[i])) {
+      weather_reduced[i] <- "snow"
+    } else if (grepl("Rain|Drizzle", df$weather_desc[i])) {
+      weather_reduced[i] <- "rain"
+    } else if (grepl("Cloudy", df$weather_desc[i])) {
+      weather_reduced[i] <- "cloudy"
+    } else if (grepl("Fog|Haze", df$weather_desc[i])) {
+      weather_reduced[i] <- "fog"
+    } else {
+      weather_reduced[i] <- "clear"
+    } 
+  }
+  
+  return(weather_reduced)
+}
+readings.aggregate$weather_desc <- ReduceWeather(weather)
+
 readings.aggregate <- InitAggregateReadings(readings.aggregate)
 
 # Transform humidex to amount over a humidex threshold (ie. lowest recorded humidex is 25)
@@ -41,67 +81,7 @@ readings.aggregate$nvgnt_heat_thi <- sapply(readings.aggregate$nvgnt_thi,
 
 # Replace temperature with a "feels like" timeseries comprised of heat index, 
 # dry bulb temperature, and wind chill temperatures.
-
-# Heat Index is computed when dewpoint 
-HeatIndex <- function(temp, rel_humidity) {
-  # Convert celsius to farenheit
-  temp_f <- (temp * 9/5) + 32
-  
-  # Constants for heat index equation
-  c1 <- -42.379
-  c2 <- 2.04901523
-  c3 <- 10.14333127
-  c4 <- -0.22475541
-  c5 <- -6.83783 * 10^-3
-  c6 <- -5.481717 * 10^-2
-  c7 <- 1.22874 * 10^-3
-  c8 <- 8.5282 * 10^-4
-  c9 <- -1.99 * 10^-6
-  
-  # Heat index equation is for fahrenheit values
-  heat_index <- (c1 + 
-                   (c2*temp_f) + 
-                   (c3*rel_humidity) + 
-                   (c4*temp_f*rel_humidity) + 
-                   (c5*(temp_f^2)) + 
-                   (c6*(rel_humidity^2)) + 
-                   (c7*(temp_f^2)*rel_humidity) + 
-                   (c8*temp_f*(rel_humidity^2)) + 
-                   (c9*(temp_f^2)*(rel_humidity^2)))
-  
-  # Convert back to celsius
-  heat_index_c <- (heat_index - 32) * 5/9
-  
-  return(heat_index_c)
-}
-WindChill <- function(temp, wind) {
-  # Constants for wind chill equation
-  c1 <- 13.12
-  c2 <- 0.6215
-  c3 <- 11.37
-  c4 <- 0.3965
-  
-  # Wind chill equation for celsius values
-  wind_chill <- c1 + (c2*temp) - (c3*(wind^0.16)) + (c4*temp*(wind^0.16));
-  
-  return(wind_chill)
-}
-FeelsLike <- function(df) {
-  feels_like <- rep(NA, nrow(df))
-  
-  for (i in 1:nrow(df)){
-    if (df$temperature[i] > 27 & df$rel_humidity_pct[i] > 40) {
-      feels_like[i] <- HeatIndex(df$temperature[i], df$rel_humidity_pct[i])
-    } else if (df$temperature[i] < 10 & df$wind_speed_kph[i] > 4.8) {
-      feels_like[i] <- WindChill(df$temperature[i], df$wind_speed_kph[i])
-    } else {
-      feels_like[i] <- df$temperature[i]
-    }
-  }
-  
-  return(feels_like)
-}
-readings.aggregate$temperature <- FeelsLike(df = readings.aggregate)
+#readings.aggregate$temperature <- FeelsLike(df = readings.aggregate)
 
 ##
 # Use 'segmented' package to find the optimal temperature breakpoint.
@@ -114,7 +94,7 @@ model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + pric
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 
                  seg.Z = ~ temperature,
-                 psi = c(15, 30))
+                 psi = c(17, 32))
 
 plot(seg, 
      res = TRUE, 
@@ -165,7 +145,7 @@ rm(model.readings.lm.presegment, seg)
 
 # Create columns that contain the previous hours' temperature > breakpoint 
 # and previous hours temperature < breakpoint.
-temp.hrs <- 6
+temp.hrs <- 47
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
 readings.aggregate <- cbind(readings.aggregate, temps)
@@ -300,10 +280,11 @@ hglasso.df.pairs <- data.frame(hglasso.residuals,
                                readings.aggregate.tail$price,
                                readings.aggregate.tail$month,
                                readings.aggregate.tail$hrstr,
+                               readings.aggregate.tail$weather_desc,
                                readings.aggregate.tail$timestamp_dst)
 names(hglasso.df.pairs) <- c("residuals", "temperature", "aggregate_count", 
                              "dayname", "holiday", "price", "month", "hour", 
-                             "time")
+                             "weather", "time")
 
 ggresiduals.pairs.temp <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
                                                         x = temperature))
@@ -354,3 +335,10 @@ ggresiduals.pairs.price <- (ggplot(hglasso.df.pairs, aes(y = residuals,
                                    y = "Residuals of log(kWh)",
                                    title= "Residuals as a Function of Pricing Sturcture"))
 ggresiduals.pairs.price
+ggresiduals.pairs.weather <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                         x = weather))
+                            + geom_boxplot()
+                            + labs(x = "Weather Description", 
+                                   y = "Residuals of log(kWh)",
+                                   title= "Residuals as a Function of Weather Description"))
+ggresiduals.pairs.weather
