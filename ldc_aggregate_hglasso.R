@@ -21,40 +21,8 @@ fpath2 <- file.path(home,
                    "weather_desc_01Mar2011_through_17Oct2012.csv")
 weather <- read.csv(fpath2)
 
-ReduceWeather <- function(df){
-  # Reduce the ~64 distinct combinations of weather terms to a set of 7 weather 
-  # terms. The most severe weather description is used for reduction.
-  #
-  # Args:
-  #   df: A dataframe with ef$weather_desc column
-  #
-  # Return:
-  # A vector of reduced weather descriptions corresponding to the indeces of 
-  # df$weather_desc.
-  weather_reduced <- rep(NA, nrow(df))
-  
-  for (i in 1:nrow(df)) {
-    if (grepl("Thunderstorms", df$weather_desc[i])) {
-      weather_reduced[i] <- "thunderstorms"
-    } else if (grepl("Ice|Freezing|Hail", df$weather_desc[i])) {
-      weather_reduced[i] <- "ice"
-    } else if (grepl("Snow", df$weather_desc[i])) {
-      weather_reduced[i] <- "snow"
-    } else if (grepl("Rain|Drizzle", df$weather_desc[i])) {
-      weather_reduced[i] <- "rain"
-    } else if (grepl("Cloudy", df$weather_desc[i])) {
-      weather_reduced[i] <- "cloudy"
-    } else if (grepl("Fog|Haze", df$weather_desc[i])) {
-      weather_reduced[i] <- "fog"
-    } else {
-      weather_reduced[i] <- "clear"
-    } 
-  }
-  
-  return(weather_reduced)
-}
+# Reduce weather descriptions to a simplified set of factors
 readings.aggregate$weather_desc <- ReduceWeather(weather)
-
 readings.aggregate <- InitAggregateReadings(readings.aggregate)
 
 # Transform humidex to amount over a humidex threshold (ie. lowest recorded humidex is 25)
