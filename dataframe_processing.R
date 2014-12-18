@@ -155,6 +155,24 @@ HeatIndex <- function(temp, rel_humidity) {
   }
 }
 
+HumidexDiff <- function(df) {
+  # Transform humidex to amount over a humidex threshold (ie. lowest recorded 
+  # humidex is 25) using values reported by Environment Canada.
+  # http://climate.weather.gc.ca/climate_normals/normals_documentation_e.html#humidex
+  #
+  # Args:
+  #   df: A smart meter readings data.frame
+  #
+  # Return:
+  #   A vector representing the amount that the humidex is over a minimum 
+  #   threshold.
+  humidex_threshold <- min(df$humidex, na.rm = TRUE) - 1
+  humidex_diff <- df$humidex
+  humidex_diff[is.na(humidex_diff)] <- humidex_threshold
+  humidex_diff <- humidex_diff - humidex_threshold
+  return(humidex_diff)
+}
+
 InitAggregateReadings <- function(df) {
   # Takes the data.frame of the parsed aggregate readings CSV and initializes 
   # datatypes, inferred information, factor levels, and tweaks a few terms 
@@ -339,4 +357,22 @@ WindChill <- function(temp, wind) {
   } else {
     return(temp)
   }
+}
+
+WindChillDiff <- function(df) {
+  # Transform wind chill to amount under a windchill threshold (ie. highest 
+  # recorded wind chill is -1) using values reported by Environment Canada in 
+  # the original data.frame.
+  #
+  # Args:
+  #   df: A smart meter readings data.frame
+  #
+  # Return:
+  #   A vector representing the amount that the wind chill is under a maximum
+  #   threshold.
+  wind_chill_threshold <- max(df$wind_chill, na.rm = TRUE) + 1
+  wind_chill_diff <- df$wind_chill
+  wind_chill_diff[is.na(wind_chill_diff)] <- wind_chill_threshold
+  wind_chill_diff <- wind_chill_diff - wind_chill_threshold
+  return(wind_chill_diff)
 }

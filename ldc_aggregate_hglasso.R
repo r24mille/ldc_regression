@@ -23,24 +23,15 @@ weather <- read.csv(fpath2)
 
 # Reduce weather descriptions to a simplified set of factors
 readings.aggregate$weather_desc <- ReduceWeather(weather)
+
+# Infer several columns of data and fix up data.frame column types.
 readings.aggregate <- InitAggregateReadings(readings.aggregate)
 
-# Transform humidex to amount over a humidex threshold (ie. lowest recorded humidex is 25)
-# http://climate.weather.gc.ca/climate_normals/normals_documentation_e.html#humidex
-humidex_threshold <- sort(readings.aggregate$humidex)[1] - 1
-readings.aggregate$humidex_diff <- readings.aggregate$humidex
-readings.aggregate$humidex_diff[is.na(readings.aggregate$humidex_diff)] <- humidex_threshold
-readings.aggregate$humidex_diff <- readings.aggregate$humidex_diff - humidex_threshold
+readings.aggregate$humidex_diff <- HumidexDiff(readings.aggregate)
+readings.aggregate$wind_chill_diff <- WindChillDiff(readings.aggregate)
 
-# Transform windchill to amount under a windchill threshold (ie. lowest recorded wind chill is -1)
-wind_chill_threshold <- tail(sort(readings.aggregate$wind_chill), 1) + 1
-readings.aggregate$wind_chill_diff <- readings.aggregate$wind_chill
-readings.aggregate$wind_chill_diff[is.na(readings.aggregate$wind_chill_diff)] <- wind_chill_threshold
-readings.aggregate$wind_chill_diff <- readings.aggregate$wind_chill_diff - wind_chill_threshold
-
-
-# Derive a few temperature humidity index (THI) variables according 
-# to Navigant analysis white paper.
+# Derive a few temperature humidity index (THI) variables according to Navigant 
+# analysis white paper.
 readings.aggregate$nvgnt_thi <- 17.5 + (0.55 * readings.aggregate$temperature) + (0.2 * readings.aggregate$dewpoint_temp_c)
 readings.aggregate$nvgnt_cool_thi <- sapply(readings.aggregate$nvgnt_thi, 
                                              function(x) max(x - 30, 0))
