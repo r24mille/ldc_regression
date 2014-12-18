@@ -153,8 +153,12 @@ NumericFactorCodedMatrix <- function(df) {
   # Transforms an input data.frame to a matrix with factor levels represented 
   # as numeric. Returned value is suitable for ?glinternet.
   #
+  # Args: 
+  #   df: A smart meter reading data.frame that has been trimmed and is ready 
+  #       for conversion to a matrix processed by ?glinternet.
+  #
   # Return:
-  # The data.frame re-coded as a numeric matrix.
+  #   The data.frame re-coded as a numeric matrix.
   numeric.m <- matrix(0, nrow = nrow(df), ncol = ncol(df))
   colnames(numeric.m) <- names(df)
   
@@ -170,9 +174,13 @@ NumericFactorCodedMatrix <- function(df) {
 }
 
 NumberFactorLevels <- function(df) {
-  # Returns:
-  # A vector in which each value represents the number of factor levels for 
-  # each column of df
+  # Args: 
+  #   df: A smart meter reading data.frame that has been trimmed and is ready 
+  #       for conversion to a matrix processed by ?glinternet.
+  #
+  # Return:
+  #   A vector in which each value represents the number of factor levels for 
+  #   each column of the data.frame passed in.
   numlevels <- rep(0, ncol(df))
   
   for (i in 1:ncol(df)) {
@@ -187,59 +195,110 @@ NumberFactorLevels <- function(df) {
 }
 
 HeatIndex <- function(temp, rel_humidity) {
-  # Heat Index is computed when dewpoint 
+  # Function computes the heat index as defined by NOAA. See 
+  # http://www.srh.noaa.gov/images/ffc/pdf/ta_htindx.PDF
+  #
+  # Formula is valid for Fahrenheit values so they are converted in the body 
+  # of this function but transformed back to celsius in the returns values.
+  # 
+  # Args:
+  #   temp: Temperature value in Celsius
+  #   rel_humidity: Relative humidity value as a percentage
+  #
+  # Return:
+  #   The heat index for the provided values (ie. apparent temperature)
   
-  # Convert celsius to farenheit
-  temp_f <- (temp * 9/5) + 32
-  
-  # Constants for heat index equation
-  c1 <- -42.379
-  c2 <- 2.04901523
-  c3 <- 10.14333127
-  c4 <- -0.22475541
-  c5 <- -6.83783 * 10^-3
-  c6 <- -5.481717 * 10^-2
-  c7 <- 1.22874 * 10^-3
-  c8 <- 8.5282 * 10^-4
-  c9 <- -1.99 * 10^-6
-  
-  # Heat index equation is for fahrenheit values
-  heat_index <- (c1 + 
-                   (c2*temp_f) + 
-                   (c3*rel_humidity) + 
-                   (c4*temp_f*rel_humidity) + 
-                   (c5*(temp_f^2)) + 
-                   (c6*(rel_humidity^2)) + 
-                   (c7*(temp_f^2)*rel_humidity) + 
-                   (c8*temp_f*(rel_humidity^2)) + 
-                   (c9*(temp_f^2)*(rel_humidity^2)))
-  
-  # Convert back to celsius
-  heat_index_c <- (heat_index - 32) * 5/9
-  
-  return(heat_index_c)
+  # Relative humidity is only valid for temperatures > 27C AND relative 
+  # humidity percentages > 40%.
+  if (temp > 27 & rel_humidity > 40) {
+    # Convert Celsius to Fahrenheit
+    temp_f <- (temp * 9/5) + 32
+    
+    # Constants for heat index equation
+    c1 <- -42.379
+    c2 <- 2.04901523
+    c3 <- 10.14333127
+    c4 <- -0.22475541
+    c5 <- -6.83783 * 10^-3
+    c6 <- -5.481717 * 10^-2
+    c7 <- 1.22874 * 10^-3
+    c8 <- 8.5282 * 10^-4
+    c9 <- -1.99 * 10^-6
+    
+    # Heat index equation is for fahrenheit values
+    heat_index <- (c1 + 
+                     (c2*temp_f) + 
+                     (c3*rel_humidity) + 
+                     (c4*temp_f*rel_humidity) + 
+                     (c5*(temp_f^2)) + 
+                     (c6*(rel_humidity^2)) + 
+                     (c7*(temp_f^2)*rel_humidity) + 
+                     (c8*temp_f*(rel_humidity^2)) + 
+                     (c9*(temp_f^2)*(rel_humidity^2)))
+    
+    # Convert back to celsius
+    heat_index_c <- (heat_index - 32) * 5/9
+    
+    
+    return(heat_index_c)
+  } else {
+    return(temp)
+  }
 }
 
 WindChill <- function(temp, wind) {
-  # Constants for wind chill equation
-  c1 <- 13.12
-  c2 <- 0.6215
-  c3 <- 11.37
-  c4 <- 0.3965
+  # Function computes the heat index as defined by Environment Canada. Code 
+  # translated from the Javascript which backs their wind chill calculator:
+  # http://www.ec.gc.ca/meteo-weather/default.js
+  # 
+  # Formulation is also easily seen at:
+  # https://en.wikipedia.org/wiki/Wind_chill#North_American_and_United_Kingdom_wind_chill_index
+  # 
+  # Args:
+  #   temp: Temperature value in Celsius
+  #   wind: Wind speed in kph
+  #
+  # Return:
+  #   The wind chill for provided values (ie. apparent temperature)
   
-  # Wind chill equation for celsius values
-  wind_chill <- c1 + (c2*temp) - (c3*(wind^0.16)) + (c4*temp*(wind^0.16));
-  
-  return(wind_chill)
+  # Windchill is defined only for temperatures at or below 10C and wind speeds 
+  # above 4.8 kilometres per hour.
+  if (temp <= 10 & wind > 4.8) {
+    # Constants for wind chill equation
+    c1 <- 13.12
+    c2 <- 0.6215
+    c3 <- 11.37
+    c4 <- 0.3965
+    
+    # Wind chill equation for celsius values
+    wind_chill <- c1 + (c2*temp) - (c3*(wind^0.16)) + (c4*temp*(wind^0.16));
+    
+    return(wind_chill)
+  } else {
+    return(temp)
+  }
 }
 
 FeelsLike <- function(df) {
+  # Converts dry-bulb temperatures to "feels like" temperatures that reflect 
+  # what the apparent temperature would feel like to a person.
+  #
+  # Args:
+  #   df: A data.frame with dry bulb temperature in Celsius, relative humidity 
+  #       as a percentage, and wind speed in kph.
+  #
+  # Return:
+  #   A vector of apparent temperature values.
+  
   feels_like <- rep(NA, nrow(df))
   
   for (i in 1:nrow(df)){
+    # Only calculate heat index and wind chill at valid values (as defined by 
+    # NOAA or Environment Canada), otherwise the apparent temperature is the 
+    # same as the dry bulb temperature.
     if (df$temperature[i] > 27 & df$rel_humidity_pct[i] > 40) {
       feels_like[i] <- HeatIndex(df$temperature[i], df$rel_humidity_pct[i])
-    } else if (df$temperature[i] < 10 & df$wind_speed_kph[i] > 4.8) {
+    } else if (df$temperature[i] <= 10 & df$wind_speed_kph[i] > 4.8) {
       feels_like[i] <- WindChill(df$temperature[i], df$wind_speed_kph[i])
     } else {
       feels_like[i] <- df$temperature[i]
