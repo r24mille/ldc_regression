@@ -84,25 +84,6 @@ FeelsLike <- function(df) {
   return(feels_like)
 }
 
-FixDataTypes <- function(df) {
-  # Takes a data frame of smart meter reading data and fixes the column data types
-  #
-  # Args:
-  #   df: A smart meter reading data.frame
-  #
-  # Return:
-  #   The dataframe with corrected column types.
-  
-  # Coerses timestamp_dst to the POSIX datetime type
-  df$timestamp_dst <- as.POSIXlt(df$timestamp_dst)
-  
-  # Enforce numeric column type on humidex and wind_chill
-  df$humidex <- as.numeric(df$humidex)
-  df$wind_chill <- as.numeric(df$wind_chill)
-  
-  return(df)
-}
-
 HeatIndex <- function(temp, rel_humidity) {
   # Function computes the heat index as defined by NOAA. See 
   # http://www.srh.noaa.gov/images/ffc/pdf/ta_htindx.PDF
@@ -173,22 +154,34 @@ HumidexDiff <- function(df) {
   return(humidex_diff)
 }
 
-InitAggregateReadings <- function(df) {
-  # Takes the data.frame of the parsed aggregate readings CSV and initializes 
-  # datatypes, inferred information, factor levels, and tweaks a few terms 
-  # to a feasible subset of interactions.
-  #
-  # Args:
-  #   df: The initial aggregate smart meter readings from parsed CSV.
-  #
-  # Return:
-  #   The dataframe initialized and reading for modelling.
-  df <- FixDataTypes(df)
-  df <- AddInferredInformation(df)
-  df <- OrderFactors(df)
+InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
+  # Initializes a data.frame for the common readings and aggregate readings 
+  # column structure. The data.frame is empty but columns have been typed 
+  # appropriately with ordered factors.
+  readings.colnames <- c("kwh", "sample_index", "daynum", "hrstr", "month", 
+                         "weekend", "timestamp_dst", "dayname", "holiday", 
+                         "temperature", "rel_humidity_pct", "wind_speed_kph", 
+                         "humidex", "wind_chill", "price")
+  readings.colclasses <- c("numeric", "integer", "integer", "factor", "factor",
+                           "factor", "POSIXct", "factor", "factor", 
+                           "numeric", "numeric", "numeric",  
+                           "numeric", "numeric", "factor")
+  if (is.aggregate == TRUE) {
+    readings.colnames <- c(readings.colnames, c("agg_count"))
+    readings.colclasses <- c(readings.colclasses, c("integer"))
+  } else {
+    readings.colnames <- c(readings.colnames, c("weather_desc"))
+    readings.colclasses <- c(readings.colclasses, c("character"))
+  }
+  df <- read.csv(file = fpath, 
+                 col.names = readings.colnames,
+                 na.strings = c("NULL", "NA", "NaN"),
+                 colClasses = readings.colclasses, 
+                 stringsAsFactors = FALSE)
   
   return(df)
 }
+
 
 NumberFactorLevels <- function(df) {
   # Args: 
@@ -235,6 +228,7 @@ NumericFactorCodedMatrix <- function(df) {
   return(numeric.m)
 }
 
+
 OrderFactors <- function(df) {
   # Reorder factors so that model contrasts and graphs make a bit more sense
   # 
@@ -244,9 +238,6 @@ OrderFactors <- function(df) {
   # 
   # Return: 
   #   The dataframe with corrected/ordered factors.
-  #df$tou_period <- factor(df$tou_period, 
-  #                        c("off_weekend", "off_morning", "mid_morning", 
-  #                          "on_peak", "mid_evening", "off_evening"))
   df$dayname <- factor(df$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
                                      "Sat"))
   df$month <- factor(df$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 

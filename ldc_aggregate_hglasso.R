@@ -11,24 +11,27 @@ source("dataframe_processing.R")
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
-                   "../Dropbox/ISS4E/R/", 
+                   "../Dropbox/ISS4E/R", 
                    "aggregate_readings_01Mar2011_through_17Oct2012.csv")
-readings.aggregate <- read.csv(fpath, 
-                               na.strings=c("NULL", "NA", "NaN"))
+readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
+                                            is.aggregate = TRUE)
+readings.aggregate <- rbind(readings.aggregate, read.csv(fpath, 
+                                                     na.strings = c("NULL", "NA", "NaN"),
+                                                     stringsAsFactors = FALSE))
 
+# Load weather descriptions from CSV (for largest city in LDC)
 fpath2 <- file.path(home, 
-                   "../Dropbox/ISS4E/R/", 
+                   "../Dropbox/ISS4E/R", 
                    "weather_desc_01Mar2011_through_17Oct2012.csv")
-weather <- read.csv(fpath2)
+weather <- read.csv(fpath2, 
+                    na.strings = c("NULL", "NA", "NaN"), 
+                    stringsAsFactors = FALSE)
 
 # Reduce weather descriptions to a simplified set of factors
 readings.aggregate$weather_desc <- ReduceWeather(weather)
 
 # Infer several columns of data and fix up data.frame column types.
-readings.aggregate <- InitAggregateReadings(readings.aggregate)
-
-readings.aggregate$humidex_diff <- HumidexDiff(readings.aggregate)
-readings.aggregate$wind_chill_diff <- WindChillDiff(readings.aggregate)
+readings.aggregate <- OrderFactor(readings.aggregate)
 
 # Derive a few temperature humidity index (THI) variables according to Navigant 
 # analysis white paper.
@@ -38,17 +41,7 @@ readings.aggregate$nvgnt_cool_thi <- sapply(readings.aggregate$nvgnt_thi,
 readings.aggregate$nvgnt_heat_thi <- sapply(readings.aggregate$nvgnt_thi, 
                                             function(x) max(25 - x, 0))
 
-# Replace temperature with a "feels like" timeseries comprised of heat index, 
-# dry bulb temperature, and wind chill temperatures.
-#readings.aggregate$temperature <- FeelsLike(df = readings.aggregate)
-
-##
 # Use 'segmented' package to find the optimal temperature breakpoint.
-# 
-# TODO(r24mille: I attempted to use psi c(0,16) to find two temperature 
-#                breakpoints (ie. Two-Threshold Regression from Moral-Carcedo 
-#                et al.) but it does not converge. Looking at the plot, this 
-#                seems sensible that only a Switching Regression applies.
 model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + dayname + holiday, 
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 
