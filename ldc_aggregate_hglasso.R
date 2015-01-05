@@ -15,9 +15,6 @@ fpath <- file.path(home,
                    "aggregate_readings_01Mar2011_through_17Oct2012.csv")
 readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
                                             is.aggregate = TRUE)
-readings.aggregate <- rbind(readings.aggregate, read.csv(fpath, 
-                                                     na.strings = c("NULL", "NA", "NaN"),
-                                                     stringsAsFactors = FALSE))
 
 # Load weather descriptions from CSV (for largest city in LDC)
 fpath2 <- file.path(home, 
@@ -28,20 +25,12 @@ weather <- read.csv(fpath2,
                     stringsAsFactors = FALSE)
 
 # Reduce weather descriptions to a simplified set of factors
-readings.aggregate$weather_desc <- ReduceWeather(weather)
+readings.aggregate$weather_desc <- ReduceWeather(weather$weather_desc)
 
-# Infer several columns of data and fix up data.frame column types.
-readings.aggregate <- OrderFactor(readings.aggregate)
+# For clarity, reorder explanatory variables which are factors
+readings.aggregate <- OrderFactors(readings.aggregate)
 
-# Derive a few temperature humidity index (THI) variables according to Navigant 
-# analysis white paper.
-readings.aggregate$nvgnt_thi <- 17.5 + (0.55 * readings.aggregate$temperature) + (0.2 * readings.aggregate$dewpoint_temp_c)
-readings.aggregate$nvgnt_cool_thi <- sapply(readings.aggregate$nvgnt_thi, 
-                                             function(x) max(x - 30, 0))
-readings.aggregate$nvgnt_heat_thi <- sapply(readings.aggregate$nvgnt_thi, 
-                                            function(x) max(25 - x, 0))
-
-# Use 'segmented' package to find the optimal temperature breakpoint.
+# Use 'segmented' package to find the optimal temperature breakpoint(s)
 model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + dayname + holiday, 
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 

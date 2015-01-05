@@ -160,22 +160,31 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
   # appropriately with ordered factors.
   readings.colnames <- c("kwh", "sample_index", "daynum", "hrstr", "month", 
                          "weekend", "timestamp_dst", "dayname", "holiday", 
-                         "temperature", "rel_humidity_pct", "wind_speed_kph", 
-                         "humidex", "wind_chill", "price")
+                         "temperature", "dewpnt_temp", "rel_humidity_pct", 
+                         "wind_speed_kph", "humidex", "wind_chill", "price")
   readings.colclasses <- c("numeric", "integer", "integer", "factor", "factor",
                            "factor", "POSIXct", "factor", "factor", 
                            "numeric", "numeric", "numeric",  
-                           "numeric", "numeric", "factor")
+                           "numeric", "numeric", "numeric", "factor")  
+  
   if (is.aggregate == TRUE) {
+    # Currently, the aggregate version of the CSV has column headers
+    has.headers <- TRUE
+    
     readings.colnames <- c(readings.colnames, c("agg_count"))
     readings.colclasses <- c(readings.colclasses, c("integer"))
   } else {
-    readings.colnames <- c(readings.colnames, c("weather_desc"))
-    readings.colclasses <- c(readings.colclasses, c("character"))
+    # Currently, the meterid version of the CSV does not have column headers
+    has.headers <- FALSE
+    
+    # The meterid version of the CSV also has two additional columns
+    readings.colnames <- c(c("meterid"), readings.colnames, c("weather_desc"))
+    readings.colclasses <- c(c("integer"), readings.colclasses, c("character"))
   }
   df <- read.csv(file = fpath, 
+                 header = has.headers, 
                  col.names = readings.colnames,
-                 na.strings = c("NULL", "NA", "NaN"),
+                 na.strings = c("NULL", "NA", "NaN", "\\N"),
                  colClasses = readings.colclasses, 
                  stringsAsFactors = FALSE)
   
@@ -255,30 +264,30 @@ OrderFactors <- function(df) {
   return(df)
 }
 
-ReduceWeather <- function(df){
+ReduceWeather <- function(vec){
   # Reduce the ~64 distinct combinations of weather terms to a set of 7 weather 
   # terms. The most severe weather description is used for reduction.
   #
   # Args:
-  #   df: A dataframe with ef$weather_desc column
+  #   vec: A vector with character values (ie. weather_desc)
   #
   # Return:
   #   A vector of reduced weather descriptions corresponding to the indeces of 
-  #   df$weather_desc.
-  weather_reduced <- rep(NA, nrow(df))
+  #   vec.
+  weather_reduced <- rep(NA, length(vec))
   
-  for (i in 1:nrow(df)) {
-    if (grepl("Thunderstorms", df$weather_desc[i])) {
+  for (i in 1:length(vec)) {
+    if (grepl("Thunderstorms", vec[i])) {
       weather_reduced[i] <- "thunderstorms"
-    } else if (grepl("Ice|Freezing|Hail", df$weather_desc[i])) {
+    } else if (grepl("Ice|Freezing|Hail", vec[i])) {
       weather_reduced[i] <- "ice"
-    } else if (grepl("Snow", df$weather_desc[i])) {
+    } else if (grepl("Snow", vec[i])) {
       weather_reduced[i] <- "snow"
-    } else if (grepl("Rain|Drizzle", df$weather_desc[i])) {
+    } else if (grepl("Rain|Drizzle", vec[i])) {
       weather_reduced[i] <- "rain"
-    } else if (grepl("Cloudy", df$weather_desc[i])) {
+    } else if (grepl("Cloudy", vec[i])) {
       weather_reduced[i] <- "cloudy"
-    } else if (grepl("Fog|Haze", df$weather_desc[i])) {
+    } else if (grepl("Fog|Haze", vec[i])) {
       weather_reduced[i] <- "fog"
     } else {
       weather_reduced[i] <- "clear"
