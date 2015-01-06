@@ -5,6 +5,7 @@ library(reshape2) # For reshaping (ie. melting) data
 
 # Source functions in other files
 source("dataframe_processing.R")
+source("individual_readings_quality_checks.R")
 
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
@@ -14,14 +15,8 @@ fpath <- file.path(home,
 readings.individual <- InitReadingsDataFrame(fpath = fpath, 
                                             is.aggregate = FALSE)
 
-
-# A small minority ~0.013% of rows have NA values for dewpnt_temp. It is a 
-# fairly simple variable to derive, so derive its value so that those rows 
-# may be used.
-
-
 # Reduce weather descriptions to a factor with 7 levels
-readings.individual$weather_desc <- ReduceWeather(readings.individual$weather_desc)
+readings.individual$weather_reduced <- ReduceWeather(readings.individual$weather_desc)
 
 # For clarity, reorder explanatory variables which are factors
 readings.individual <- OrderFactors(readings.individual)
@@ -36,6 +31,6 @@ readings.individual$nvgnt_cool_thi <- sapply(readings.individual$nvgnt_thi,
 readings.individual$nvgnt_heat_thi <- sapply(readings.individual$nvgnt_thi, 
                                             function(x) max(25 - x, 0))
 
-summary(readings.individual)
-plot(density(log(readings.individual$kwh)))
-plot(readings.individual$month)
+# Perform data quality checks
+#expl_var_dist_checks(df = readings.individual)
+

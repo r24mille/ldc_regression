@@ -25,7 +25,7 @@ weather <- read.csv(fpath2,
                     stringsAsFactors = FALSE)
 
 # Reduce weather descriptions to a simplified set of factors
-readings.aggregate$weather_desc <- ReduceWeather(weather$weather_desc)
+readings.aggregate$weather_reduced <- ReduceWeather(weather$weather_desc)
 
 # For clarity, reorder explanatory variables which are factors
 readings.aggregate <- OrderFactors(readings.aggregate)
