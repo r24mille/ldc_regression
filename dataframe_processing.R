@@ -247,6 +247,9 @@ OrderFactors <- function(df) {
   # 
   # Return: 
   #   The dataframe with corrected/ordered factors.
+  if("meterid" %in% colnames(df)) {
+    df$meterid <- factor(df$meterid)
+  }
   df$dayname <- factor(df$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
                                      "Sat"))
   df$month <- factor(df$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 
@@ -257,9 +260,9 @@ OrderFactors <- function(df) {
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
   df$weekend <- factor(df$weekend, c("No", "Yes"))
   df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
-  df$weather_desc <- factor(df$weather_desc, 
-                            c("clear", "fog", "cloudy", "rain", "snow", "ice", 
-                              "thunderstorms"))
+  df$weather_reduced <- factor(df$weather_reduced, 
+                            c("clear", "cloudy_fog", "rain_tstorms", 
+                              "snow_ice", "unknown"))
   
   return(df)
 }
@@ -277,18 +280,21 @@ ReduceWeather <- function(vec){
   weather_reduced <- rep(NA, length(vec))
   
   for (i in 1:length(vec)) {
-    if (grepl("Thunderstorms", vec[i])) {
-      weather_reduced[i] <- "thunderstorms"
-    } else if (grepl("Ice|Freezing|Hail", vec[i])) {
-      weather_reduced[i] <- "ice"
-    } else if (grepl("Snow", vec[i])) {
-      weather_reduced[i] <- "snow"
-    } else if (grepl("Rain|Drizzle", vec[i])) {
-      weather_reduced[i] <- "rain"
-    } else if (grepl("Cloudy", vec[i])) {
-      weather_reduced[i] <- "cloudy"
-    } else if (grepl("Fog|Haze", vec[i])) {
-      weather_reduced[i] <- "fog"
+    if (is.na(vec[i])) {
+      weather_reduced[i] <- "unknown"
+    } else if (grepl("Snow|Ice|Freezing|Hail", vec[i])) {
+      # Ice is under-represented in explanatory variables, even when it 
+      # represents Ice|Freezing|Hail, so I'm combining it with Snow.
+      weather_reduced[i] <- "snow_ice"
+    } else if (grepl("Rain|Drizzle|Thunderstorm", vec[i])) {
+      # Rain|Drizzle would not change electricity use drrastically compared to 
+      # Thunderstorms, so I'm combining them. Also, thunderstorms were arguably 
+      # under-represented in explanatory variables as its own term.
+      weather_reduced[i] <- "rain_tstorms"
+    } else if (grepl("Cloudy|Overcast|Fog|Haze", vec[i])) {
+      # Fog|Haze would not change electricity use drastically compared to 
+      # Cloudy, so I'm combinging them.
+      weather_reduced[i] <- "cloudy_fog"
     } else {
       weather_reduced[i] <- "clear"
     } 
