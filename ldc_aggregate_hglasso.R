@@ -8,6 +8,9 @@ library(reshape2) # For reshaping (ie. melting) data
 # Source functions in other files
 source("dataframe_processing.R")
 
+# Set the seed for reproducable results.
+#set.seed(1234)
+
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
@@ -31,7 +34,7 @@ readings.aggregate$weather_reduced <- ReduceWeather(weather$weather_desc)
 readings.aggregate <- OrderFactors(readings.aggregate)
 
 # Use 'segmented' package to find the optimal temperature breakpoint(s)
-model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + dayname + holiday, 
+model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price, 
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 
                  seg.Z = ~ temperature,
@@ -86,7 +89,7 @@ rm(model.readings.lm.presegment, seg)
 
 # Create columns that contain the previous hours' temperature > breakpoint 
 # and previous hours temperature < breakpoint.
-temp.hrs <- 47
+temp.hrs <- 6
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
 readings.aggregate <- cbind(readings.aggregate, temps)
@@ -100,10 +103,12 @@ readings.trimmed <- tail(x= readings.trimmed,
 Y.mat <- as.matrix(log(readings.trimmed[,1]))
 X.mat <- NumericFactorCodedMatrix(readings.trimmed[,-1])
 numlvl.vec <- NumberFactorLevels(readings.trimmed[,-1])
+print(paste("Start of HG-LASSO:", Sys.time()))
 cv.hglasso <- glinternet.cv(X = X.mat, 
                             Y = Y.mat, 
                             numLevels = numlvl.vec, 
                             family = "gaussian")
+print(paste("End of HG-LASSO:", Sys.time()))
 
 # Select the column names of main effects and interactions
 cat.colnames <- names(readings.trimmed[c(FALSE, numlvl.vec > 1)])
