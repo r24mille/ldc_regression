@@ -84,6 +84,8 @@ for(s in 1:length(seasons)) {
   }
 }
 
+# Currently predictions are normally distributed while the observed response 
+# is lognormal(?) I don't think their model should be that far off.
 subdiv_lmms <- list()
 i <- 1
 for(s in 1:1) {
