@@ -1,27 +1,3 @@
-AddInferredInformation <- function(df) {
-  # Additional information can be inferred from existing dataframe column 
-  # and placed into new columns that may be useful for modelling.
-  #
-  # Args:
-  #   df: A smart meter reading data.frame
-  #
-  # Return:
-  #   The dataframe with several new columns added, with information inferred 
-  #   from columns that were originally in the CSV.
-  # Add column which represents "month" as a categorical factor
-  df$month <- paste0("m", (df$timestamp_dst$mon + 1))
-  
-  # Represent hours as levels rather than integers
-  df$hrstr <- paste0("h", df$hour)
-  
-  # Add yes/no weekend flag
-  df$weekend <- ifelse(df$timestamp_dst$wday == 0 | df$timestamp_dst$wday == 6,
-                       "Yes",
-                       "No")  
-  
-  return(df)
-}
-
 CreatePastTemperatureMatrix <- function(nlags, df.readings) {
   # Creates a matrix of values such that each column looks an additional hour 
   # into the past at degrees over the temperature breakpoint.
@@ -258,11 +234,18 @@ OrderFactors <- function(df) {
                      c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
                        "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
-  df$weekend <- factor(df$weekend, c("No", "Yes"))
+  df$holiday <- factor(df$weekend, c("FALSE", "TRUE"))
+  df$weekend <- factor(df$weekend, c("FALSE", "TRUE"))
   df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
-  df$weather_reduced <- factor(df$weather_reduced, 
-                            c("clear", "cloudy_fog", "rain_tstorms", 
-                              "snow_ice", "unknown"))
+  if (length(unique(df$weather_reduced == 4))) {
+    df$weather_reduced <- factor(df$weather_reduced, 
+                                 c("clear", "cloudy_fog", "rain_tstorms", 
+                                   "snow_ice"))
+  } else {
+    df$weather_reduced <- factor(df$weather_reduced, 
+                              c("clear", "cloudy_fog", "rain_tstorms", 
+                                "snow_ice", "unknown"))
+  }
   
   return(df)
 }
