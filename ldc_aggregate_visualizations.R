@@ -1,11 +1,20 @@
+library(segmented) # Find linear regression breakpoint
+library(ggplot2) # Better plotting!
+library(scales) # For scaling axes (eg. datetime)
+library(glinternet) # Hierarchical group-LASSO variable selection
+library(car) # Companion to Applied Regression (better qqPlot)
+library(reshape2) # For reshaping (ie. melting) data
+
+# Source functions in other files
+source("dataframe_processing.R")
+
+# Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
-                   "../Dropbox/ISS4E/R/", 
+                   "../Dropbox/ISS4E/R", 
                    "aggregate_readings_01Mar2011_through_17Oct2012.csv")
-readings.aggregate <- read.csv(fpath)
-
-# Convert the observation_timestamp column to Date
-readings.aggregate$timestamp_dst <- as.POSIXlt(readings.aggregate$timestamp_dst)
+readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
+                                            is.aggregate = TRUE)
 
 ##
 # Make a simple plot of number of households involved in each hourly measurement
