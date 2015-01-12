@@ -8,21 +8,19 @@ library(reshape2) # For reshaping (ie. melting) data
 # Source functions in other files
 source("dataframe_processing.R")
 
-# Set the seed for reproducable results.
-#set.seed(1234)
-
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R", 
-                   "aggregate_readings_01Mar2011_through_17Oct2012.csv")
+                   "aggregate_readings_29Oct2010_through_17Oct2012.csv")
+
 readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
                                             is.aggregate = TRUE)
 
 # Load weather descriptions from CSV (for largest city in LDC)
 fpath2 <- file.path(home, 
                    "../Dropbox/ISS4E/R", 
-                   "weather_desc_01Mar2011_through_17Oct2012.csv")
+                   "weather_desc_29Oct2010_through_17Oct2012.csv")
 weather <- read.csv(fpath2, 
                     na.strings = c("NULL", "NA", "NaN"), 
                     stringsAsFactors = FALSE)
@@ -34,7 +32,7 @@ readings.aggregate$weather_reduced <- ReduceWeather(weather$weather_desc)
 readings.aggregate <- OrderFactors(readings.aggregate)
 
 # Use 'segmented' package to find the optimal temperature breakpoint(s)
-model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price, 
+model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + holiday, 
                                      data = readings.aggregate)
 seg <- segmented(obj = model.readings.lm.presegment, 
                  seg.Z = ~ temperature,
@@ -106,8 +104,7 @@ numlvl.vec <- NumberFactorLevels(readings.trimmed[,-1])
 print(paste("Start of HG-LASSO:", Sys.time()))
 cv.hglasso <- glinternet.cv(X = X.mat, 
                             Y = Y.mat, 
-                            numLevels = numlvl.vec, 
-                            family = "gaussian")
+                            numLevels = numlvl.vec)
 print(paste("End of HG-LASSO:", Sys.time()))
 
 # Select the column names of main effects and interactions
@@ -169,11 +166,11 @@ readings.aggregate.tail <- tail(x = readings.aggregate,
 hglasso.df.resids <- data.frame(hglasso.residuals, 
                                 readings.aggregate.tail$temperature,
                                 readings.aggregate.tail$agg_count, 
-                                X.mat[,1],
-                                X.mat[,2], 
-                                X.mat[,3],
-                                X.mat[,4],
-                                X.mat[,5],
+                                X.mat[,"dayname"],
+                                X.mat[,"holiday"], 
+                                X.mat[,"price"],
+                                X.mat[,"month"],
+                                X.mat[,"hrstr"],
                                 readings.aggregate.tail$timestamp_dst)
 names(hglasso.df.resids) <- c("residuals", "temperature", "aggregate_count", 
                               "dayname", "holiday", "price", "month", "hour", 
@@ -219,6 +216,9 @@ ggresiduals.facet
 
 # Plot pairs
 hglasso.df.pairs <- data.frame(hglasso.residuals, 
+                               hglasso.residuals.bktr, 
+                               log(readings.aggregate.tail$kwh), 
+                               readings.aggregate.tail$kwh,
                                readings.aggregate.tail$temperature,
                                readings.aggregate.tail$agg_count, 
                                readings.aggregate.tail$dayname,
@@ -226,11 +226,28 @@ hglasso.df.pairs <- data.frame(hglasso.residuals,
                                readings.aggregate.tail$price,
                                readings.aggregate.tail$month,
                                readings.aggregate.tail$hrstr,
-                               readings.aggregate.tail$weather_desc,
+                               readings.aggregate.tail$weather_reduced,
                                readings.aggregate.tail$timestamp_dst)
-names(hglasso.df.pairs) <- c("residuals", "temperature", "aggregate_count", 
-                             "dayname", "holiday", "price", "month", "hour", 
-                             "weather", "time")
+names(hglasso.df.pairs) <- c("residuals", "residuals_bktr", "log_kwh", "kwh", 
+                             "temperature", "aggregate_count", "dayname", 
+                             "holiday", "price", "month", "hour", "weather", 
+                             "time")
+
+ggresiduals.pairs.log_kwh <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+                                                           x = log_kwh))
+                              + geom_point(alpha = 1/2)
+                              + labs(x = "Lognormal response, log(kWh)", 
+                                     y = "Residuals of lognormal model",
+                                     title= "Model Residuals as a Function of log(kWh)"))
+ggresiduals.pairs.log_kwh
+
+ggresiduals.pairs.kwh <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
+                                                        x = kwh))
+                           + geom_point(alpha = 1/2)
+                           + labs(x = "Observed Meter Reading (kWh)", 
+                                  y = "Residuals",
+                                  title= "Backtrasformed Residuals as a Function Observations"))
+ggresiduals.pairs.kwh
 
 ggresiduals.pairs.temp <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
                                                         x = temperature))
