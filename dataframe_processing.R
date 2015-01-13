@@ -299,6 +299,7 @@ TrimExplanatoryVariables <- function(df) {
                                            "timestamp_dst", 
                                            "temperature", 
                                            "dewpoint_temp_c", 
+                                           "dewpnt_temp",
                                            "rel_humidity_pct", 
                                            "wind_speed_kph", 
                                            "visibility_km", 
