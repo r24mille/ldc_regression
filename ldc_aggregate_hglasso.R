@@ -12,7 +12,7 @@ source("dataframe_processing.R")
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
                    "../Dropbox/ISS4E/R", 
-                   "aggregate_readings_29Oct2010_through_17Oct2012.csv")
+                   "aggregate_readings_01Mar2011_through_17Oct2012.csv")
 
 readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
                                             is.aggregate = TRUE)
@@ -20,7 +20,7 @@ readings.aggregate <- InitReadingsDataFrame(fpath = fpath,
 # Load weather descriptions from CSV (for largest city in LDC)
 fpath2 <- file.path(home, 
                    "../Dropbox/ISS4E/R", 
-                   "weather_desc_29Oct2010_through_17Oct2012.csv")
+                   "weather_desc_01Mar2011_through_17Oct2012.csv")
 weather <- read.csv(fpath2, 
                     na.strings = c("NULL", "NA", "NaN"), 
                     stringsAsFactors = FALSE)
@@ -249,59 +249,62 @@ ggresiduals.pairs.kwh <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr,
                                   title= "Backtrasformed Residuals as a Function Observations"))
 ggresiduals.pairs.kwh
 
-ggresiduals.pairs.temp <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.temp <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                         x = temperature))
                            + geom_point(alpha = 1/2)
                            + labs(x = "Outdoor Temperature (Celsius)", 
-                                  y = "Residuals of log(kWh)",
+                                  y = "Backtransformed Residuals (kWh)",
                                   title= "Residuals as a Function of Temperature"))
 ggresiduals.pairs.temp
-ggresiduals.pairs.agg <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.agg <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                        x = aggregate_count))
                           + geom_point(alpha = 1/2)
                           + labs(x = "Number of Meters Used to Determine Aggregate Average", 
-                                 y = "Residuals of log(kWh)",
+                                 y = "Backtransformed Residuals (kWh)",
                                  title= "Residuals as a Function of the Number of Meters Used to Determine the Aggregate Average Reading"))
 ggresiduals.pairs.agg
-ggresiduals.pairs.holiday <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.holiday <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                            x = holiday))
                               + geom_boxplot()
                               + labs(x = "Holiday (as observed by Ontario Energy Board)", 
-                                     y = "Residuals of log(kWh)",
+                                     y = "Backtransformed Residuals (kWh)",
                                      title= "Residuals as a Function of Holidays"))
 ggresiduals.pairs.holiday
-ggresiduals.pairs.hour <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.hour <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                         x = hour))
                            + geom_boxplot()
                            + labs(x = "Hour of Day", 
                                   y = "Residuals of log(kWh)",
                                   title= "Residuals as a Function of Hour-of-Day"))
 ggresiduals.pairs.hour
-ggresiduals.pairs.dayname <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.dayname <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                            x = dayname))
                               + geom_boxplot()
                               + labs(x = "Day of Week", 
-                                     y = "Residuals of log(kWh)",
+                                     y = "Backtransformed Residuals (kWh)",
                                      title= "Residuals as a Function of Day-of-Week"))
 ggresiduals.pairs.dayname
-ggresiduals.pairs.month <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.month <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                          x = month))
                             + geom_boxplot()
                             + labs(x = "Month", 
-                                   y = "Residuals of log(kWh)",
+                                   y = "Backtransformed Residuals (kWh)",
                                    title= "Residuals as a Function of Month-of-Year"))
 ggresiduals.pairs.month
-ggresiduals.pairs.price <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.price <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                          x = price))
                             + geom_boxplot()
                             + labs(x = "Electricity Pricing Category", 
-                                   y = "Residuals of log(kWh)",
+                                   y = "Backtransformed Residuals (kWh)",
                                    title= "Residuals as a Function of Pricing Sturcture"))
 ggresiduals.pairs.price
-ggresiduals.pairs.weather <- (ggplot(hglasso.df.pairs, aes(y = residuals, 
+ggresiduals.pairs.weather <- (ggplot(hglasso.df.pairs, aes(y = residuals_bktr, 
                                                          x = weather))
                             + geom_boxplot()
                             + labs(x = "Weather Description", 
-                                   y = "Residuals of log(kWh)",
+                                   y = "Backtransformed Residuals (kWh)",
                                    title= "Residuals as a Function of Weather Description"))
 ggresiduals.pairs.weather
+
+# Investigate the worst residuals
+bad.resids <- readings.trimmed[abs(hglasso.residuals.bktr) > 0.6,]
