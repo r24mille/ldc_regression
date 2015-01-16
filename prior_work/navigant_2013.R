@@ -68,8 +68,7 @@ seasons <- list(summer = c("m6", "m7", "m8"),
                 winshoulder = c("m11", "m3", "m4"))
 
 # Weekend:
-#    A vector of values that weekend can take (ie. "Yes"/"No")
-wknd_lvls <- attributes(readings.individual$weekend)$levels
+wknd_lvls <- c(TRUE, FALSE)
 
 # Hour of the Day:
 #   A vector of values that hrstr can take (ie. "h0", "h1", ..., "h23")
@@ -97,12 +96,20 @@ for(s in 1:1) {
                                hour_lvls[h])
       subdiv_lmms[[i]] <- list()
       names(subdiv_lmms)[i] <- uniqstr
+      # TODO(r24mille): Left-censoring data to try lognormal modeling
       uniqdf <- readings.individual[readings.individual$month %in% seasons[[s]] & 
                                     readings.individual$weekend == wknd_lvls[w] & 
-                                    readings.individual$hrstr == hour_lvls[h],]
+                                    readings.individual$hrstr == hour_lvls[h] &
+                                    readings.individual$kwh > 0,]
+      
+      # Demean the response grouped by meterid
+      uniqdf$demean_kwh <- uniqdf$kwh - ave(uniqdf$kwh, uniqdf$meterid)
+      
+      plot(density(uniqdf$demean_kwh))
+      
       subdiv_lmms[[i]]$df <- uniqdf
       
-      uniqlmm <- lmer(kwh ~ season_1stmnth + season_2ndmnth + nvgnt_cool_thi 
+      uniqlmm <- lmer(demean_kwh ~ season_1stmnth + season_2ndmnth + nvgnt_cool_thi 
                       + nvgnt_heat_thi + tou_billing + tou_billing:nvgnt_cool_thi 
                       + tou_billing:nvgnt_heat_thi + (1|meterid),
                       data = uniqdf)
