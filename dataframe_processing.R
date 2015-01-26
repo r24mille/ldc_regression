@@ -1,4 +1,4 @@
-CreatePastTemperatureMatrix <- function(nlags, df.readings) {
+CreatePastTemperatureBreakpointMatrix <- function(nlags, df.readings) {
   # Creates a matrix of values such that each column looks an additional hour 
   # into the past at degrees over the temperature breakpoint.
   #
@@ -10,7 +10,8 @@ CreatePastTemperatureMatrix <- function(nlags, df.readings) {
   #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
   #   own coefficient when modelled.
   lagnames <- c(paste0("overbreak_lag", c(0:nlags)),
-                paste0("underbreak_lag", c(0:nlags)))
+                paste0("underbreak_lag", c(0:nlags))
+                )
   templags <- matrix(nrow = nrow(df.readings),
                      ncol = (2 * (nlags + 1)))
   colnames(templags) <- lagnames
@@ -18,6 +19,7 @@ CreatePastTemperatureMatrix <- function(nlags, df.readings) {
   # Unfortunately iterating over the dataframe seems to be the best method
   for(i in 1:nrow(df.readings)) {
     for(j in 0:nlags) {
+      # Populate the temperatures over/under breakpoint
       if (i-j > 0) {
         templags[i, (j+1)] <- df.readings[i-j, "temp_over_break"]
         templags[i, (j+1+nlags+1)] <- df.readings[i-j, "temp_under_break"]
@@ -30,6 +32,105 @@ CreatePastTemperatureMatrix <- function(nlags, df.readings) {
   
   return(templags)
 }
+
+CreatePastTemperatureDifferencesMatrix <- function(nlags, temperatures) {
+  # Creates a matrix of values such that each column is the difference between 
+  # n and n+1 hours in the past temperatures.
+  #
+  # Args:
+  #   nlags: The number of hours (ie. lags) to include in the matrix
+  #   temperatures: A vector of temperatures
+  #
+  # Returns:
+  #   An [n x nlags] matrix such that each temperature difference affects the 
+  #   n-th hour coefficient when modelled.
+  lagnames <- c(paste0("temp_diff", c(0:(nlags-1)), c(1:nlags)))
+  tempdiffs <- matrix(nrow = length(temperatures),
+                      ncol = nlags)
+  colnames(tempdiffs) <- lagnames
+  
+  # Iterate over the dataframe to create matrix of differences in temperature 
+  # between hours.
+  for (i in 1:length(temperatures)) {
+    for (j in 1:nlags) {
+      if (i-j > 0) {
+        tempdiffs[i, j] <- temperatures[i-j+1] - temperatures[i-j]
+      } else {
+        tempdiffs[i, j] <- 0
+      }
+    }
+  }
+  
+  return(tempdiffs)
+}
+
+CreatePastTemperatureMatrix <- function(nlags, df.readings) {
+  # Creates a matrix of values such that each column looks an additional hour 
+  # into the past at degrees over the temperature breakpoint.
+  #
+  # Args:
+  #   nlags: The number of hours (ie. lags) to include in the matrix
+  #   df.readings: A dataframe of smart meter readings.
+  #
+  # Returns:
+  #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
+  #   own coefficient when modelled.
+  lagnames <- c(paste0("temp_lag", c(0:nlags)))
+  templags <- matrix(nrow = nrow(df.readings),
+                     ncol = (nlags + 1))
+  colnames(templags) <- lagnames
+  
+  # Unfortunately iterating over the dataframe seems to be the best method
+  for(i in 1:nrow(df.readings)) {
+    for(j in 0:nlags) {
+      # Populate the past temperatures
+      if (i-j > 0) {
+        templags[i, (j+1)] <- df.readings[i-j, "temperature"]
+      } else {
+        templags[i, (j+1)] <- 0
+      }
+    }
+  }
+  
+  return(templags)
+}
+
+CreatePastWeatherDescDataFrame <- function(nlags, weather_reduced) {
+  # TODO(r24mille): Thiiiiis is not efficient.
+  
+  descnames <- c(paste0("weatherdesc_lag", c(0:nlags)))
+  pastweather <- data.frame(weatherdesc_lag0 = weather_reduced,
+                            stringsAsFactors = TRUE)
+  
+  # Iterate over the dataframe to create matrix of differences in temperature 
+  # between hours.
+  for (i in 1:length(weather_reduced)) {
+    for (j in 0:nlags) {
+      if (i-j > 0) {
+        pastweather[i, j+1] <- as.character(weather_reduced[i-j])
+      } else {
+        pastweather[i, j+1] <- "unknown"
+      }
+    }
+  }
+  
+  colnames(pastweather) <- descnames
+  
+  for (i in 1:(nlags+1)) {
+    if (i == 1) {
+      pastweather[,i] <- factor(pastweather[,i], 
+                                c("clear", "cloudy_fog", "rain_tstorms", 
+                                  "snow_ice"))
+    } else {
+      pastweather[,i] <- factor(pastweather[,i], 
+                                c("clear", "cloudy_fog", "rain_tstorms", 
+                                  "snow_ice", "unknown"))
+    }
+  }
+  
+  return(pastweather)
+}
+
 
 FeelsLike <- function(df) {
   # Converts dry-bulb temperatures to "feels like" temperatures that reflect 
@@ -308,13 +409,31 @@ TrimExplanatoryVariables <- function(df) {
                                            "wind_chill_diff", 
                                            "agg_count", 
                                            "weekend", 
+                                           "into_dst_hr",
+                                           "outof_dst_hr",
                                            "humidex",
                                            "humidex_diff",
+                                           "temperature",
                                            "temp_over_break",
                                            "temp_under_break",
                                            "nvgnt_thi",
                                            "nvgnt_cool_thi",
-                                           "nvgnt_heat_thi")]
+                                           "nvgnt_heat_thi",
+                                           "temp_lag0",
+                                           "temp_lag1",
+                                           "temp_lag2",
+                                           "temp_lag3",
+                                           "temp_lag4",
+                                           "temp_lag5",
+                                           "temp_lag6",
+                                           "overbreak_lag1",
+                                           "underbreak_lag1",
+                                           "overbreak_lag2",
+                                           "underbreak_lag2",
+                                           "overbreak_lag0",
+                                           "underbreak_lag0",
+                                           "overbreak_lag7",
+                                           "underbreak_lag7")]
   return(df.trimmed)
 }
 

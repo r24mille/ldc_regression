@@ -32,29 +32,31 @@ readings.aggregate$weather_reduced <- ReduceWeather(weather$weather_desc)
 readings.aggregate <- OrderFactors(readings.aggregate)
 
 # Use 'segmented' package to find the optimal temperature breakpoint(s)
-model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + holiday, 
-                                     data = readings.aggregate)
-seg <- segmented(obj = model.readings.lm.presegment, 
-                 seg.Z = ~ temperature,
-                 psi = c(17, 32))
+#model.readings.lm.presegment <- lm(log(kwh) ~ temperature + month + hrstr + price + holiday, 
+#                                     data = readings.aggregate)
+#seg <- segmented(obj = model.readings.lm.presegment, 
+#                 seg.Z = ~ temperature,
+#                 psi = c(17, 32))
 
-plot(seg, 
-     res = TRUE, 
-     res.col = rgb(0, 0, 0, 10, maxColorValue=100),
-     pch = 16,
-     main = "Piecewise Linear Fit with Temperature Breakpoint",
-     xlab = "Summer Temperatures (Celsius)",
-     ylab = "Effect of Temperature",
-     col = "red",
-     lwd = 2)
+#plot(seg, 
+#     res = TRUE, 
+#     res.col = rgb(0, 0, 0, 10, maxColorValue=100),
+#     pch = 16,
+#     main = "Piecewise Linear Fit with Temperature Breakpoint",
+#     xlab = "Summer Temperatures (Celsius)",
+#     ylab = "Effect of Temperature",
+#     col = "red",
+#     lwd = 2)
 
-temperature.break <- seg$psi[1,2]
-temperature.exhaust <- seg$psi[2,2]
+#temperature.break <- seg$psi[1,2]
+#temperature.exhaust <- seg$psi[2,2]
+#temperature.break <- 17.33771
+#temperature.exhaust <- 32.38212
 
 # Standard temperature over breakpoint metric that I've been using
-readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
-                                             readings.aggregate$temperature - temperature.break, 
-                                             0)
+#readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > temperature.break, 
+#                                             readings.aggregate$temperature - temperature.break, 
+#                                             0)
 
 # Humidex used as temperature over breakpoint (misnomer for now)
 #readings.aggregate$temp_over_break <- readings.aggregate$humidex
@@ -65,14 +67,14 @@ readings.aggregate$temp_over_break <- ifelse(readings.aggregate$temperature > te
 #readings.aggregate$temp_over_break <- readings.aggregate$nvgnt_cool_thi
 
 # Limit temp_over_break to the exhaustion point ~32C
-readings.aggregate$temp_over_break <- sapply(readings.aggregate$temp_over_break, 
-                                             function(x) min(x, temperature.exhaust - temperature.break))
+#readings.aggregate$temp_over_break <- sapply(readings.aggregate$temp_over_break, 
+#                                             function(x) min(x, temperature.exhaust - temperature.break))
 
 
 # Standard temperature under breakpoint metric that I've been using
-readings.aggregate$temp_under_break <- ifelse(readings.aggregate$temperature < temperature.break, 
-                                              readings.aggregate$temperature - temperature.break, 
-                                              0)
+#readings.aggregate$temp_under_break <- ifelse(readings.aggregate$temperature < temperature.break, 
+#                                              readings.aggregate$temperature - temperature.break, 
+#                                              0)
 
 # Wind chill used as temperature under breakpoint (misnomer for now)
 #readings.aggregate$temp_under_break <- readings.aggregate$wind_chill
@@ -83,24 +85,42 @@ readings.aggregate$temp_under_break <- ifelse(readings.aggregate$temperature < t
 #readings.aggregate$temp_under_break <- readings.aggregate$nvgnt_heat_thi
 
 # Clean up some unneeded variables from R environment
-rm(model.readings.lm.presegment, seg)
+#rm(model.readings.lm.presegment, seg)
 
 # Create columns that contain the previous hours' temperature > breakpoint 
 # and previous hours temperature < breakpoint.
-temp.hrs <- 6
+temp.hrs <- 2
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
 readings.aggregate <- cbind(readings.aggregate, temps)
 rm(temps)
+
+# Polynomial experiment
+poly.vars <- poly(readings.aggregate$temp_lag2, degree = 3)
+colnames(poly.vars) <- c("temp_poly1", "temp_poly2", "temp_poly3")
+readings.aggregate <- cbind(readings.aggregate, poly.vars)
+
+pastweather <- CreatePastWeatherDescDataFrame(nlags = temp.hrs, 
+                                              weather_reduced = readings.aggregate$weather_reduced)
+readings.aggregate$weather_reduced <- pastweather$weatherdesc_lag2
+
+# Trim up data frame
 readings.trimmed <- TrimExplanatoryVariables(readings.aggregate)
+
 # Don't include the first several rows due to missing past temperature info
 readings.trimmed <- tail(x= readings.trimmed, 
-                         n = nrow(readings.trimmed) - temp.hrs) 
+                         n = nrow(readings.trimmed) - temp.hrs)
 
 # Prep data into matrices for use in hierarchical group-lasso
 Y.mat <- as.matrix(log(readings.trimmed[,1]))
 X.mat <- NumericFactorCodedMatrix(readings.trimmed[,-1])
 numlvl.vec <- NumberFactorLevels(readings.trimmed[,-1])
+
+# From a similar package, glmnet, "The default depends on the sample size nobs
+# relative to the number of variables nvars. If nobs > nvars, the default is
+# 0.0001, close to zero. If nobs < nvars, the default is 0.01. A very small 
+# value of lambda.min.ratio will lead to a saturated fit in the 
+# nobs < nvars case.
 print(paste("Start of HG-LASSO:", Sys.time()))
 cv.hglasso <- glinternet.cv(X = X.mat, 
                             Y = Y.mat, 
@@ -308,3 +328,5 @@ ggresiduals.pairs.weather
 
 # Investigate the worst residuals
 bad.resids <- readings.trimmed[abs(hglasso.residuals.bktr) > 0.6,]
+hglasso.mape.bktr
+nrow(bad.resids)
