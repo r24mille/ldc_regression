@@ -100,22 +100,30 @@ for(s in 1:1) {
       uniqdf <- readings.individual[readings.individual$month %in% seasons[[s]] & 
                                     readings.individual$weekend == wknd_lvls[w] & 
                                     readings.individual$hrstr == hour_lvls[h] &
-                                    readings.individual$kwh > 0,]
+                                    readings.individual$meterid == 22182,]
       
+      # I am commenting out the demeaned response because I think it's a 
+      # misinterpretation of the Navigant paper. I believe they were instead 
+      # demeaning independent variables, similar to:
+      #
+      # http://www.econjobrumors.com/topic/clustered-standard-errors-for-panel-data-in-sas
+      #
+      # To get the same results from PROC SURVEYREG as they would from PROC GLM.
+      # I am re-implementing their described algorithm as a GLMM, so I do not 
+      # believe it applies.
+      # 
       # Demean the response grouped by meterid
-      uniqdf$demean_kwh <- uniqdf$kwh - ave(uniqdf$kwh, uniqdf$meterid)
-      
-      plot(density(uniqdf$demean_kwh))
-      
+      #uniqdf$demean_kwh <- uniqdf$kwh - ave(uniqdf$kwh, uniqdf$meterid)
+            
       subdiv_lmms[[i]]$df <- uniqdf
       
-      uniqlmm <- lmer(demean_kwh ~ season_1stmnth + season_2ndmnth + nvgnt_cool_thi 
+      uniqlmm <- glm(kwh ~ season_1stmnth + season_2ndmnth + nvgnt_cool_thi 
                       + nvgnt_heat_thi + tou_billing + tou_billing:nvgnt_cool_thi 
-                      + tou_billing:nvgnt_heat_thi + (1|meterid),
+                      + tou_billing:nvgnt_heat_thi,
                       data = uniqdf)
       subdiv_lmms[[i]]$lmm <- uniqlmm
       print(uniqstr)
+      plot(uniqlmm)
       i <- i + 1
     }
   }
-}
