@@ -1,3 +1,7 @@
+# Ignore generated .xls or .xlsx files
+*.xls
+*.xlsx
+
 # History files
 .Rhistory
 
