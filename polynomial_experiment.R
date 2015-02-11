@@ -1,4 +1,3 @@
-library(segmented) # Find linear regression breakpoint
 library(ggplot2) # Better plotting!
 library(scales) # For scaling axes (eg. datetime)
 library(glinternet) # Hierarchical group-LASSO variable selection
@@ -11,7 +10,7 @@ source("dataframe_processing.R")
 # Load SmartMeterReading data from CSV
 home <- Sys.getenv("HOME")
 fpath <- file.path(home, 
-                   "../Dropbox/ISS4E/R", 
+                   "./Dropbox/ISS4E/R", 
                    "aggregate_readings_01Mar2011_through_17Oct2012.csv")
 
 readings.aggregate <- InitReadingsDataFrame(fpath = fpath, 
@@ -19,7 +18,7 @@ readings.aggregate <- InitReadingsDataFrame(fpath = fpath,
 
 # Load weather descriptions from CSV (for largest city in LDC)
 fpath2 <- file.path(home, 
-                    "../Dropbox/ISS4E/R", 
+                    "./Dropbox/ISS4E/R", 
                     "weather_desc_01Mar2011_through_17Oct2012.csv")
 weather <- read.csv(fpath2, 
                     na.strings = c("NULL", "NA", "NaN"), 
@@ -64,7 +63,7 @@ poly.lm8 <- lm(log(kwh) ~ month + hrstr + dayname + price + holiday + weather_re
 anova(poly.lm1, poly.lm2, poly.lm3, poly.lm4, poly.lm5, poly.lm6, poly.lm7, poly.lm8)
 
 
-fitted.bktr <- exp(poly.lm7$fitted.values)
+fitted.bktr <- exp(poly.lm4$fitted.values)
 qplot(x = readings.aggregate$temperature,
       y = readings.aggregate$kwh)
 qplot(x = readings.aggregate$temperature, 
@@ -76,6 +75,10 @@ qplot(x = readings.aggregate$temperature,
 # See what the polinomial line looks like without other vars
 qplot(x = readings.aggregate$temperature, 
       y = log(readings.aggregate$kwh), 
-      geom=c("point", "smooth"), 
-      method="lm", 
-      formula = y ~poly(x, 3)) 
+      ylim = c(-0.75, 1.7),
+      geom = c("point", "smooth"), 
+      method = "lm", 
+      formula = y ~ poly(x, 3), 
+      main = "log(kWh) as a Function of Temperature using a Cubic Polynomial Regression",
+      ylab = "Transformed Observation [log(kWh)]",
+      xlab = "Temperature (Celsius)") 

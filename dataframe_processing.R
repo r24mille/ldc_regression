@@ -236,15 +236,13 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
   # column structure. The data.frame is empty but columns have been typed 
   # appropriately with ordered factors.
   readings.colnames <- c("kwh", "sample_index", "daynum", "hrstr", "month", 
-                         "weekend", "into_dst_hr", "outof_dst_hr", 
-                         "timestamp_dst", "dayname", "holiday", "temperature", 
-                         "dewpnt_temp", "rel_humidity_pct", "wind_speed_kph", 
-                         "humidex", "wind_chill", "price")
+                         "weekend", "timestamp_dst", "dayname", "holiday", 
+                         "temperature", "dewpnt_temp", "rel_humidity_pct", 
+                         "wind_speed_kph", "humidex", "wind_chill", "price")
   readings.colclasses <- c("numeric", "integer", "integer", "factor", "factor",
-                           "logical", "logical", "logical", 
-                           "POSIXct", "factor", "logical", "numeric", 
-                           "numeric", "numeric",  "numeric", 
-                           "numeric", "numeric", "factor")  
+                           "logical", "POSIXct", "factor", "logical", 
+                           "numeric", "numeric", "numeric",  
+                           "numeric", "numeric", "numeric", "factor")  
   
   if (is.aggregate == TRUE) {
     # Currently, the aggregate version of the CSV has column headers
@@ -337,8 +335,7 @@ OrderFactors <- function(df) {
                      c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
                        "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
-  #df$holiday <- factor(df$weekend, c("FALSE", "TRUE"))
-  #df$weekend <- factor(df$weekend, c("FALSE", "TRUE"))
+
   df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
   if (length(unique(df$weather_reduced == 4))) {
     df$weather_reduced <- factor(df$weather_reduced, 
@@ -398,7 +395,6 @@ TrimExplanatoryVariables <- function(df) {
                                            "daynum", 
                                            "hour", 
                                            "timestamp_dst", 
-                                           "temperature", 
                                            "dewpoint_temp_c", 
                                            "dewpnt_temp",
                                            "rel_humidity_pct", 
@@ -409,8 +405,6 @@ TrimExplanatoryVariables <- function(df) {
                                            "wind_chill_diff", 
                                            "agg_count", 
                                            "weekend", 
-                                           "into_dst_hr",
-                                           "outof_dst_hr",
                                            "humidex",
                                            "humidex_diff",
                                            "temperature",
