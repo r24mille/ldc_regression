@@ -65,5 +65,8 @@ readings.trimmed <- tail(x= readings.trimmed,
 
 # Fit a saturated model
 lm.saturated <- lm(formula = log(kwh) ~ (.)^2 - temp_poly1:temp_poly2 - temp_poly1:temp_poly3 - temp_poly2:temp_poly3, 
-                     data = readings.trimmed)
+                   data = readings.trimmed)
 
+backward.results <- BackwardStepwiseRemoval(df.obs = readings.trimmed, 
+                                            formula.saturated = lm.saturated,
+                                            pval.threshold = 0.01)

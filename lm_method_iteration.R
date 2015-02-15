@@ -1,6 +1,6 @@
-BackwardStepwisePolynomialMultipleRegression <- function(df.obs, 
-                                                         formula.saturated,
-                                                         pval.threshold = 0.05) {
+BackwardStepwiseRemoval <- function(df.obs, 
+                                    formula.saturated,
+                                    pval.threshold = 0.05) {
   # Performs backward stepwise linear regression including the provided number 
   # of hours of temperature history in its search space.
   #
