@@ -1,6 +1,7 @@
 BackwardStepwiseRemoval <- function(df.obs, 
                                     formula.saturated,
-                                    pval.threshold = 0.05) {
+                                    pval.threshold = 0.05,
+                                    wghts) {
   # Performs backward stepwise linear regression including the provided number 
   # of hours of temperature history in its search space.
   #
@@ -9,7 +10,7 @@ BackwardStepwiseRemoval <- function(df.obs,
   #
   # Args:
   #   df.obs: The data.frame of observations to be used.
-  #   formula.saturated: The formula for the maximal model to be considered.
+  #   formula.saturated: The formula string for the maximal model to be considered.
   #   pval.threshold: Controls the p-value stopping criteria. A likelihood ratio
   #                   test (LRT) is performed and the term is kept so long as 
   #                   it's p-value is < 0.05 (default). Other thresholds 
@@ -17,9 +18,11 @@ BackwardStepwiseRemoval <- function(df.obs,
   #
   # Return:
   #   A data.frame of results fitting the df.stepresults convention established 
-  #   elsewhere.  
+  #   elsewhere.
+  print(wghts)
   lm.fitted <- lm(formula = formula.saturated, 
-                  data = df.obs)
+                  data = df.obs,
+                  weights = wghts)
   
   # I know... iteratively building a data.frame is bad
   explvars <- attr(lm.fitted$terms, "term.labels")
@@ -28,6 +31,8 @@ BackwardStepwiseRemoval <- function(df.obs,
                                residual.se = lm.summary$sigma,
                                mult.r2 = lm.summary$r.squared,
                                adj.r2 = lm.summary$adj.r.squared,
+                               aic = AIC(lm.fitted),
+                               bic = BIC(lm.fitted),
                                fstat.val = lm.summary$fstatistic[["value"]],
                                fstat.numdf = lm.summary$fstatistic[["numdf"]],
                                fstat.dendf = lm.summary$fstatistic[["dendf"]],
@@ -60,7 +65,9 @@ BackwardStepwiseRemoval <- function(df.obs,
     
     if (is.stepwise.complete == FALSE) {
       # Remove least significant variable and update the GLM
-      lm.fitted <- update(lm.fitted, paste("~ . -", explvar.todrop))
+      lm.fitted <- update(object = lm.fitted, 
+                          formula = paste("~ . -", explvar.todrop), 
+                          weights = wghts)
       
       # Record results from simplified GLM
       explvars <- attr(lm.fitted$terms, "term.labels")
@@ -70,6 +77,8 @@ BackwardStepwiseRemoval <- function(df.obs,
                                          residual.se = lm.summary$sigma,
                                          mult.r2 = lm.summary$r.squared,
                                          adj.r2 = lm.summary$adj.r.squared,
+                                         aic = AIC(lm.fitted),
+                                         bic = BIC(lm.fitted),
                                          fstat.val = lm.summary$fstatistic[["value"]],
                                          fstat.numdf = lm.summary$fstatistic[["numdf"]],
                                          fstat.dendf = lm.summary$fstatistic[["dendf"]],
