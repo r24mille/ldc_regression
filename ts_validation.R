@@ -62,16 +62,16 @@ TimeSeriesOutOfSampleValidation <- function(tsfrmla, tsdata, xregmat, respvec, k
     tslm.forecast <- forecast(object = tslm.trainfit, newdata = tsdata.valid)
     
     # Fit a dynamic regression model with AR(1) structured errors
-    #ar1err.trainfit <- Arima(x = kwh.train, xreg = xreg.train, order = c(1, 0, 0), include.drift = FALSE)
-    #ar1err.forecast <- forecast(object = ar1err.trainfit, xreg = xreg.valid)
+    ar1err.trainfit <- Arima(x = kwh.train, xreg = xreg.train, order = c(1, 0, 0), include.drift = FALSE)
+    ar1err.forecast <- forecast(object = ar1err.trainfit, xreg = xreg.valid)
     
     # Find the out-of-sample measures of accuracy
     tslm.accuracy <- accuracy(tslm.forecast, x = tsdata.valid[,"kwh"])
     results.tslm[i,] <- c(i, (idx.stop - idx.start + 1), idx.start, idx.stop, floor(hrs.in.window), (idx.stop+1), (idx.stop+floor(hrs.in.window)), 
                      tslm.accuracy["Test set","MAE"], tslm.accuracy["Test set","MAPE"], tslm.accuracy["Test set","ACF1"])
-    #ar1err.accuracy <- accuracy(ar1err.forecast, x = ts(c(kwh.train, kwh.valid)))
-    #results.ar1err[i,] <- c(i, (idx.stop - idx.start + 1), idx.start, idx.stop, floor(hrs.in.window), (idx.stop+1), (idx.stop+floor(hrs.in.window)), 
-    #                   ar1err.accuracy["Test set","MAE"], ar1err.accuracy["Test set","MAPE"], ar1err.accuracy["Test set","ACF1"])
+    ar1err.accuracy <- accuracy(ar1err.forecast, x = ts(c(kwh.train, kwh.valid)))
+    results.ar1err[i,] <- c(i, (idx.stop - idx.start + 1), idx.start, idx.stop, floor(hrs.in.window), (idx.stop+1), (idx.stop+floor(hrs.in.window)), 
+                       ar1err.accuracy["Test set","MAE"], ar1err.accuracy["Test set","MAPE"], ar1err.accuracy["Test set","ACF1"])
     
     # Move origin of training and validation time series
     idx.start <- idx.start + floor(hrs.in.window)
