@@ -1,7 +1,7 @@
 library(MASS) # For correcting Gamma glm AIC
 
 source('dataframe_processing.R')
-source('goodness_fit_visualization.R')
+# source('goodness_fit_visualization.R')
 source('pseudo_rsquared.R')
 
 BackwardStepwiseLinearRegression <- function(nlags, df.obs, formula.maximal,
