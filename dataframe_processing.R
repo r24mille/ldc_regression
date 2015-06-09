@@ -1,93 +1,27 @@
-CreatePastTemperatureBreakpointMatrix <- function(nlags, df.readings) {
+CreatePastTemperatureMatrix <- function(nlags, datafr.readings) {
   # Creates a matrix of values such that each column looks an additional hour 
   # into the past at degrees over the temperature breakpoint.
   #
   # Args:
   #   nlags: The number of hours (ie. lags) to include in the matrix
-  #   df.readings: A dataframe of smart meter readings.
-  #
-  # Returns:
-  #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
-  #   own coefficient when modelled.
-  lagnames <- c(paste0("overbreak_lag", c(0:nlags)),
-                paste0("underbreak_lag", c(0:nlags))
-                )
-  templags <- matrix(nrow = nrow(df.readings),
-                     ncol = (2 * (nlags + 1)))
-  colnames(templags) <- lagnames
-  
-  # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(df.readings)) {
-    for(j in 0:nlags) {
-      # Populate the temperatures over/under breakpoint
-      if (i-j > 0) {
-        templags[i, (j+1)] <- df.readings[i-j, "temp_over_break"]
-        templags[i, (j+1+nlags+1)] <- df.readings[i-j, "temp_under_break"]
-      } else {
-        templags[i, (j+1)] <- 0
-        templags[i, (j+1+nlags+1)] <- 0
-      }
-    }
-  }
-  
-  return(templags)
-}
-
-CreatePastTemperatureDifferencesMatrix <- function(nlags, temperatures) {
-  # Creates a matrix of values such that each column is the difference between 
-  # n and n+1 hours in the past temperatures.
-  #
-  # Args:
-  #   nlags: The number of hours (ie. lags) to include in the matrix
-  #   temperatures: A vector of temperatures
-  #
-  # Returns:
-  #   An [n x nlags] matrix such that each temperature difference affects the 
-  #   n-th hour coefficient when modelled.
-  lagnames <- c(paste0("temp_diff", c(0:(nlags-1)), c(1:nlags)))
-  tempdiffs <- matrix(nrow = length(temperatures),
-                      ncol = nlags)
-  colnames(tempdiffs) <- lagnames
-  
-  # Iterate over the dataframe to create matrix of differences in temperature 
-  # between hours.
-  for (i in 1:length(temperatures)) {
-    for (j in 1:nlags) {
-      if (i-j > 0) {
-        tempdiffs[i, j] <- temperatures[i-j+1] - temperatures[i-j]
-      } else {
-        tempdiffs[i, j] <- 0
-      }
-    }
-  }
-  
-  return(tempdiffs)
-}
-
-CreatePastTemperatureMatrix <- function(nlags, df.readings) {
-  # Creates a matrix of values such that each column looks an additional hour 
-  # into the past at degrees over the temperature breakpoint.
-  #
-  # Args:
-  #   nlags: The number of hours (ie. lags) to include in the matrix
-  #   df.readings: A dataframe of smart meter readings.
+  #   datafr.readings: A dataframe of smart meter readings.
   #
   # Returns:
   #   An [n x (nlags + 1)] matrix such that each hour into the past can have its
   #   own coefficient when modelled.
   lagnames <- c(paste0("temp_lag", c(0:nlags)))
-  templags <- matrix(nrow = nrow(df.readings),
+  templags <- matrix(nrow = nrow(datafr.readings),
                      ncol = (nlags + 1))
   colnames(templags) <- lagnames
   
   # Unfortunately iterating over the dataframe seems to be the best method
-  for(i in 1:nrow(df.readings)) {
+  for(i in 1:nrow(datafr.readings)) {
     for(j in 0:nlags) {
       # Populate the past temperatures
       if (i-j > 0) {
-        templags[i, (j+1)] <- df.readings[i-j, "temperature"]
+        templags[i, (j+1)] <- datafr.readings[i-j, "temperature"]
       } else {
-        templags[i, (j+1)] <- 0
+        templags[i, (j+1)] <- NA
       }
     }
   }
@@ -132,29 +66,29 @@ CreatePastWeatherDescDataFrame <- function(nlags, weather_reduced) {
 }
 
 
-FeelsLike <- function(df) {
+FeelsLike <- function(datafr) {
   # Converts dry-bulb temperatures to "feels like" temperatures that reflect 
   # what the apparent temperature would feel like to a person.
   #
   # Args:
-  #   df: A data.frame with dry bulb temperature in Celsius, relative humidity 
-  #       as a percentage, and wind speed in kph.
+  #   datafr: A data.frame with dry bulb temperature in Celsius, relative humidity 
+  #           as a percentage, and wind speed in kph.
   #
   # Return:
   #   A vector of apparent temperature values.
   
-  feels_like <- rep(NA, nrow(df))
+  feels_like <- rep(NA, nrow(datafr))
   
-  for (i in 1:nrow(df)){
+  for (i in 1:nrow(datafr)){
     # Only calculate heat index and wind chill at valid values (as defined by 
     # NOAA or Environment Canada), otherwise the apparent temperature is the 
     # same as the dry bulb temperature.
-    if (df$temperature[i] > 27 & df$rel_humidity_pct[i] > 40) {
-      feels_like[i] <- HeatIndex(df$temperature[i], df$rel_humidity_pct[i])
-    } else if (df$temperature[i] <= 10 & df$wind_speed_kph[i] > 4.8) {
-      feels_like[i] <- WindChill(df$temperature[i], df$wind_speed_kph[i])
+    if (datafr$temperature[i] > 27 & datafr$rel_humidity_pct[i] > 40) {
+      feels_like[i] <- HeatIndex(datafr$temperature[i], datafr$rel_humidity_pct[i])
+    } else if (datafr$temperature[i] <= 10 & datafr$wind_speed_kph[i] > 4.8) {
+      feels_like[i] <- WindChill(datafr$temperature[i], datafr$wind_speed_kph[i])
     } else {
-      feels_like[i] <- df$temperature[i]
+      feels_like[i] <- datafr$temperature[i]
     }
   }
   
@@ -206,26 +140,25 @@ HeatIndex <- function(temp, rel_humidity) {
     # Convert back to celsius
     heat_index_c <- (heat_index - 32) * 5/9
     
-    
     return(heat_index_c)
   } else {
     return(temp)
   }
 }
 
-HumidexDiff <- function(df) {
+HumidexDiff <- function(datafr) {
   # Transform humidex to amount over a humidex threshold (ie. lowest recorded 
   # humidex is 25) using values reported by Environment Canada.
   # http://climate.weather.gc.ca/climate_normals/normals_documentation_e.html#humidex
   #
   # Args:
-  #   df: A smart meter readings data.frame
+  #   datafr: A smart meter readings data.frame
   #
   # Return:
   #   A vector representing the amount that the humidex is over a minimum 
   #   threshold.
-  humidex_threshold <- min(df$humidex, na.rm = TRUE) - 1
-  humidex_diff <- df$humidex
+  humidex_threshold <- min(datafr$humidex, na.rm = TRUE) - 1
+  humidex_diff <- datafr$humidex
   humidex_diff[is.na(humidex_diff)] <- humidex_threshold
   humidex_diff <- humidex_diff - humidex_threshold
   return(humidex_diff)
@@ -236,13 +169,15 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
   # column structure. The data.frame is empty but columns have been typed 
   # appropriately with ordered factors.
   readings.colnames <- c("kwh", "sample_index", "daynum", "hrstr", "month", 
-                         "weekend", "timestamp_dst", "dayname", "holiday", 
+                         "year", "hourofday", "dayofweek", "dayofmonth", "dayofyear", 
+                         "weekend", "timestamp_dst", "timestamp_std", "dayname", "holiday", 
                          "temperature", "dewpnt_temp", "rel_humidity_pct", 
-                         "wind_speed_kph", "humidex", "wind_chill", "price")
+                         "wind_speed_kph", "humidex", "wind_chill", "price", "tou_active")
   readings.colclasses <- c("numeric", "integer", "integer", "factor", "factor",
-                           "logical", "POSIXct", "factor", "logical", 
+                           "integer", "integer", "integer", "integer", "integer", 
+                           "factor", "POSIXct", "character", "factor", "factor", 
                            "numeric", "numeric", "numeric",  
-                           "numeric", "numeric", "numeric", "factor")  
+                           "numeric", "numeric", "numeric", "factor", "factor")  
   
   if (is.aggregate == TRUE) {
     # Currently, the aggregate version of the CSV has column headers
@@ -258,30 +193,38 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
     readings.colnames <- c(c("meterid"), readings.colnames, c("weather_desc"))
     readings.colclasses <- c(c("integer"), readings.colclasses, c("character"))
   }
-  df <- read.csv(file = fpath, 
+  datafr <- read.csv(file = fpath, 
                  header = has.headers, 
                  col.names = readings.colnames,
                  na.strings = c("NULL", "NA", "NaN", "\\N"),
                  colClasses = readings.colclasses, 
                  stringsAsFactors = FALSE)
+  datafr$how_frac <- (((datafr$dayofweek - 1) * 24) + (datafr$hourofday + 1)) / 168 # Hours in a week
+  datafr$hom_frac <- (((datafr$dayofmonth - 1) * 24) + (datafr$hourofday + 1)) / 730 # Average number of hours in a month
+  datafr$hoy_frac <- (((datafr$dayofyear - 1) * 24) + (datafr$hourofday + 1)) / (8760 + 6) # 2012 is a leap year, so add 6 hours to keep years consistent
   
-  return(df)
+  # Column type POSIXlt needs a manually-provided timezone for standard time
+  datafr$timestamp_std <- as.POSIXlt(x = datafr$timestamp_std, 
+                                     format = "%Y-%m-%d %H:%M:%S",
+                                     tz = "EST")
+  
+  return(datafr)
 }
 
 
-NumberFactorLevels <- function(df) {
+NumberFactorLevels <- function(datafr) {
   # Args: 
-  #   df: A smart meter reading data.frame that has been trimmed and is ready 
+  #   datafr: A smart meter reading data.frame that has been trimmed and is ready 
   #       for conversion to a matrix processed by ?glinternet.
   #
   # Return:
   #   A vector in which each value represents the number of factor levels for 
   #   each column of the data.frame passed in.
-  numlevels <- rep(0, ncol(df))
+  numlevels <- rep(0, ncol(datafr))
   
-  for (i in 1:ncol(df)) {
-    if (is.factor(df[,i])) {
-      numlevels[i] <- nlevels(df[,i])
+  for (i in 1:ncol(datafr)) {
+    if (is.factor(datafr[,i])) {
+      numlevels[i] <- nlevels(datafr[,i])
     } else {
       numlevels[i] <- 1
     }
@@ -290,24 +233,24 @@ NumberFactorLevels <- function(df) {
   return(numlevels)
 }
 
-NumericFactorCodedMatrix <- function(df) {
+NumericFactorCodedMatrix <- function(datafr) {
   # Transforms an input data.frame to a matrix with factor levels represented 
   # as numeric. Returned value is suitable for ?glinternet.
   #
   # Args: 
-  #   df: A smart meter reading data.frame that has been trimmed and is ready 
+  #   datafr: A smart meter reading data.frame that has been trimmed and is ready 
   #       for conversion to a matrix processed by ?glinternet.
   #
   # Return:
   #   The data.frame re-coded as a numeric matrix.
-  numeric.m <- matrix(0, nrow = nrow(df), ncol = ncol(df))
-  colnames(numeric.m) <- names(df)
+  numeric.m <- matrix(0, nrow = nrow(datafr), ncol = ncol(datafr))
+  colnames(numeric.m) <- names(datafr)
   
-  for (i in 1:ncol(df)) {
-    if (is.factor(df[,i])) {
-      numeric.m[,i] <- as.numeric(df[,i]) - 1
+  for (i in 1:ncol(datafr)) {
+    if (is.factor(datafr[,i])) {
+      numeric.m[,i] <- as.numeric(datafr[,i]) - 1
     } else {
-      numeric.m[,i] <- df[,i]
+      numeric.m[,i] <- datafr[,i]
     }
   }
   
@@ -315,43 +258,131 @@ NumericFactorCodedMatrix <- function(df) {
 }
 
 
-OrderFactors <- function(df) {
+OrderFactors <- function(datafr) {
   # Reorder factors so that model contrasts and graphs make a bit more sense
   # 
   # Args: 
-  #   df: A smart meter reading data.frame that has been run through
+  #   datafr: A smart meter reading data.frame that has been run through
   #       fixDataTypes(...) and addInferredInformation(...).
   # 
   # Return: 
   #   The dataframe with corrected/ordered factors.
-  if("meterid" %in% colnames(df)) {
-    df$meterid <- factor(df$meterid)
+  if("meterid" %in% colnames(datafr)) {
+    datafr$meterid <- factor(datafr$meterid)
   }
-  df$dayname <- factor(df$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
+  datafr$weekend <- factor(datafr$weekend, c("FALSE", "TRUE"))
+  datafr$holiday <- factor(datafr$holiday, c("FALSE", "TRUE"))
+  datafr$tou_active <- factor(datafr$tou_active, c("FALSE", "TRUE"))
+  datafr$dayname <- factor(datafr$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
                                      "Sat"))
-  df$month <- factor(df$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 
+  datafr$month <- factor(datafr$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 
                                  "m8", "m9", "m10", "m11", "m12"))
-  df$hrstr <- factor(df$hrstr, 
+  datafr$hrstr <- factor(datafr$hrstr, 
                      c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
                        "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
                        "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
 
-  df$price <- factor(df$price, c("flat", "off_peak", "mid_peak", "on_peak"))
-  if (length(unique(df$weather_reduced == 4))) {
-    df$weather_reduced <- factor(df$weather_reduced, 
-                                 c("clear", "cloudy_fog", "rain_tstorms", 
-                                   "snow_ice"))
-  } else {
-    df$weather_reduced <- factor(df$weather_reduced, 
-                              c("clear", "cloudy_fog", "rain_tstorms", 
-                                "snow_ice", "unknown"))
+  datafr$price <- factor(datafr$price, c("flat", "off_peak", "mid_peak", "on_peak"))
+  datafr$weather_reduced <- factor(datafr$weather_reduced)
+  
+  if("severe_weather" %in% colnames(datafr)) {
+    datafr$severe_weather <- factor(datafr$severe_weather, c("FALSE", "TRUE"))
   }
   
-  return(df)
+  if("working_day" %in% colnames(datafr)) {
+    datafr$working_day <- factor(datafr$working_day, c("FALSE", "TRUE"))
+  }
+    
+  return(datafr)
 }
 
-ReduceWeather <- function(vec){
-  # Reduce the ~64 distinct combinations of weather terms to a set of 7 weather 
+ReduceWeatherCoarseTerms <- function(vec){
+  # Reduce the ~64 distinct combinations of weather terms to a set of 11 weather 
+  # terms. The most severe weather description is used for reduction.
+  #
+  # Args:
+  #   vec: A vector with character values (ie. weather_desc)
+  #
+  # Return:
+  #   A vector of reduced weather descriptions corresponding to the indeces of 
+  #   vec.
+  weather_reduced <- rep(NA, length(vec))
+  
+  for (i in 1:length(vec)) {
+    if (is.na(vec[i])) {
+      weather_reduced[i] <- "unknown"
+    } else if (grepl("Hail|Pellet", vec[i])) {
+      # "Pellets" to catch "Snow Pellets", "Ice Pellets", and "Ice Pellet Showers"
+      weather_reduced[i] <- "hail"
+    } else if (grepl("Freezing", vec[i])) {
+      # "Freezing" to catch "Freezing Rain", "Freezing Drizzle", 
+      weather_reduced[i] <- "freezing_rain"
+    } else if (grepl("Heavy Snow|Moderate Snow", vec[i])) {
+      # Heavy snow might keep an Ontarian in their house.
+      weather_reduced[i] <- "heavy_snow"
+    } else if (grepl("Heavy Rain", vec[i])) {
+      # "Heavy Rain" to catch "Heavy Rain", "Heavy Rain Showers"
+      weather_reduced[i] <- "heavy_rain"
+    } else if (grepl("Moderate Rain|Rain", vec[i])) {
+      # "Moderate Rain" to catch "Moderate Rain" and "Moderate Rain Showers"
+      weather_reduced[i] <- "moderate_rain"
+    } else if (grepl("Snow", vec[i])) {
+      # "Snow" to catch "Snow Showers" and "Snow"
+      weather_reduced[i] <- "snow"
+    } else if (grepl("Thunderstorm", vec[i])) {
+      # Thunderstorms
+      weather_reduced[i] <- "tstorms"
+    } else if (grepl("Overcast|Fog|Haze|Drizzle", vec[i])) {
+      # "Rain|Drizzle" to catch "Rain", "Rain Showers", and "Drizzle"
+      weather_reduced[i] <- "fog_drizzle"
+    } else if (grepl("Cloudy", vec[i])) {
+      # Fog|Haze would not change electricity use drastically compared to 
+      # Cloudy, so I'm combinging them.
+      weather_reduced[i] <- "cloudy"
+    } else if (grepl("Clear", vec[i])) {
+      weather_reduced[i] <- "clear"
+    } else {
+      weather_reduced[i] <- "unknown"
+    }
+  }
+  
+  return(weather_reduced)
+}
+
+ReduceSevereWeather <- function(vec){
+  # Reduce the ~64 distinct combinations of weather terms to a boolean indicating 
+  # whether there is severe weather in the area or not.
+  #
+  # Args:
+  #   vec: A vector with character values (ie. weather_desc)
+  #
+  # Return:
+  #   A vector of reduced weather descriptions corresponding to the indeces of 
+  #   vec.
+  severe_weather <- rep(NA, length(vec))
+  
+  for (i in 1:length(vec)) {
+    if (is.na(vec[i])) {
+      severe_weather[i] <- "unknown"
+    } else if (grepl("Hail|Pellet|Freezing|Heavy Snow|Moderate Snow|Heavy Rain|Thunderstorms", vec[i])) {
+      # "Hail" catches "Moderate Hail" and "Hail"
+      # "Pellets" to catch "Snow Pellets", "Ice Pellets", and "Ice Pellet Showers"
+      # "Freezing" to catch "Freezing Rain", "Freezing Drizzle"
+      # "Heavy Snow" only occurs once in the dataset but seems severe
+      # "Moderate Snow" might be considered severe enough to affect an Ontarian's behavior
+      # "Heavy Rain" to catch "Heavy Rain", "Heavy Rain Showers"
+      # "Thunderstorms" might be considered severe enough to affect an Ontarian's behavior
+      severe_weather[i] <- TRUE
+    } else {
+      severe_weather[i] <- FALSE
+    }
+  }
+  
+  return(severe_weather)
+}
+
+ReduceWeatherFourTerms <- function(vec){
+  # Reduce the ~64 distinct combinations of weather terms to a set of 4 weather 
   # terms. The most severe weather description is used for reduction.
   #
   # Args:
@@ -370,7 +401,7 @@ ReduceWeather <- function(vec){
       # represents Ice|Freezing|Hail, so I'm combining it with Snow.
       weather_reduced[i] <- "snow_ice"
     } else if (grepl("Rain|Drizzle|Thunderstorm", vec[i])) {
-      # Rain|Drizzle would not change electricity use drrastically compared to 
+      # Rain|Drizzle would not change electricity use drastically compared to 
       # Thunderstorms, so I'm combining them. Also, thunderstorms were arguably 
       # under-represented in explanatory variables as its own term.
       weather_reduced[i] <- "rain_tstorms"
@@ -378,58 +409,17 @@ ReduceWeather <- function(vec){
       # Fog|Haze would not change electricity use drastically compared to 
       # Cloudy, so I'm combinging them.
       weather_reduced[i] <- "cloudy_fog"
-    } else {
+    } else if (grepl("Clear", vec[i])) {
       weather_reduced[i] <- "clear"
-    } 
+    } else {
+      weather_reduced[i] <- "unknown"
+    }
   }
   
   return(weather_reduced)
 }
 
-TrimExplanatoryVariables <- function(df) {
-  # The dataframe formed from parsing the .csv file and manipulating past 
-  # temperature breakpoint information has several extra columns. Trim the 
-  # data.frame down to only those explanatory variables to be considered by the 
-  # model.
-  df.trimmed <- df[, ! colnames(df) %in% c("sample_index", 
-                                           "daynum", 
-                                           "hour", 
-                                           "timestamp_dst", 
-                                           "dewpoint_temp_c", 
-                                           "dewpnt_temp",
-                                           "rel_humidity_pct", 
-                                           "wind_speed_kph", 
-                                           "visibility_km", 
-                                           "pressure_kpa",
-                                           "wind_chill",
-                                           "wind_chill_diff", 
-                                           "agg_count", 
-                                           "weekend", 
-                                           "humidex",
-                                           "humidex_diff",
-                                           "temperature",
-                                           "temp_over_break",
-                                           "temp_under_break",
-                                           "nvgnt_thi",
-                                           "nvgnt_cool_thi",
-                                           "nvgnt_heat_thi",
-                                           "temp_lag0",
-                                           "temp_lag1",
-                                           "temp_lag2",
-                                           "temp_lag3",
-                                           "temp_lag4",
-                                           "temp_lag5",
-                                           "temp_lag6",
-                                           "overbreak_lag1",
-                                           "underbreak_lag1",
-                                           "overbreak_lag2",
-                                           "underbreak_lag2",
-                                           "overbreak_lag0",
-                                           "underbreak_lag0",
-                                           "overbreak_lag7",
-                                           "underbreak_lag7")]
-  return(df.trimmed)
-}
+
 
 WindChill <- function(temp, wind) {
   # Function computes the heat index as defined by Environment Canada. Code 
@@ -464,19 +454,21 @@ WindChill <- function(temp, wind) {
   }
 }
 
-WindChillDiff <- function(df) {
+
+
+WindChillDiff <- function(datafr) {
   # Transform wind chill to amount under a windchill threshold (ie. highest 
   # recorded wind chill is -1) using values reported by Environment Canada in 
   # the original data.frame.
   #
   # Args:
-  #   df: A smart meter readings data.frame
+  #   datafr: A smart meter readings data.frame
   #
   # Return:
   #   A vector representing the amount that the wind chill is under a maximum
   #   threshold.
-  wind_chill_threshold <- max(df$wind_chill, na.rm = TRUE) + 1
-  wind_chill_diff <- df$wind_chill
+  wind_chill_threshold <- max(datafr$wind_chill, na.rm = TRUE) + 1
+  wind_chill_diff <- datafr$wind_chill
   wind_chill_diff[is.na(wind_chill_diff)] <- wind_chill_threshold
   wind_chill_diff <- wind_chill_diff - wind_chill_threshold
   return(wind_chill_diff)
