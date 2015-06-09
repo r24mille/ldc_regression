@@ -3,7 +3,7 @@
 *.xlsx
 
 # Ignore all the data in the "results" folder
-./results/*
+results/
 
 # History files
 .Rhistory
