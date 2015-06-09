@@ -52,7 +52,7 @@ temp.hrs <- 2
 temps <- CreatePastTemperatureMatrix(nlags = temp.hrs, 
                                      df.readings = readings.aggregate)
 readings.aggregate$temperature <- temps[,(temp.hrs+1)]
-rm(temps)
+#rm(temps)
 
 # Centered polynomials
 poly.deg <- 5
@@ -67,7 +67,7 @@ rm(poly.vars)
 pastweather <- CreatePastWeatherDescDataFrame(nlags = temp.hrs, 
                                               weather_reduced = readings.aggregate$weather_reduced)
 readings.aggregate$weather_reduced <- pastweather[,(temp.hrs+1)]
-rm(pastweather)
+#rm(pastweather)
 
 # Trim up data frame
 readings.trimmed <- TrimExplanatoryVariables(readings.aggregate)
