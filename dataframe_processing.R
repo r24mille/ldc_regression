@@ -71,8 +71,8 @@ FeelsLike <- function(datafr) {
   # what the apparent temperature would feel like to a person.
   #
   # Args:
-  #   datafr: A data.frame with dry bulb temperature in Celsius, relative humidity 
-  #           as a percentage, and wind speed in kph.
+  #   datafr: A data.frame with dry bulb temperature in Celsius, relative 
+  #           humidity as a percentage, and wind speed in kph.
   #
   # Return:
   #   A vector of apparent temperature values.
@@ -194,11 +194,11 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
     readings.colclasses <- c(c("integer"), readings.colclasses, c("character"))
   }
   datafr <- read.csv(file = fpath, 
-                 header = has.headers, 
-                 col.names = readings.colnames,
-                 na.strings = c("NULL", "NA", "NaN", "\\N"),
-                 colClasses = readings.colclasses, 
-                 stringsAsFactors = FALSE)
+                     header = has.headers, 
+                     col.names = readings.colnames,
+                     na.strings = c("NULL", "NA", "NaN", "\\N"),
+                     colClasses = readings.colclasses, 
+                     stringsAsFactors = FALSE)
   datafr$how_frac <- (((datafr$dayofweek - 1) * 24) + (datafr$hourofday + 1)) / 168 # Hours in a week
   datafr$hom_frac <- (((datafr$dayofmonth - 1) * 24) + (datafr$hourofday + 1)) / 730 # Average number of hours in a month
   datafr$hoy_frac <- (((datafr$dayofyear - 1) * 24) + (datafr$hourofday + 1)) / (8760 + 6) # 2012 is a leap year, so add 6 hours to keep years consistent
@@ -214,8 +214,8 @@ InitReadingsDataFrame <- function(fpath, is.aggregate = FALSE) {
 
 NumberFactorLevels <- function(datafr) {
   # Args: 
-  #   datafr: A smart meter reading data.frame that has been trimmed and is ready 
-  #       for conversion to a matrix processed by ?glinternet.
+  #   datafr: A smart meter reading data.frame that has been trimmed and is 
+  #           ready for conversion to a matrix processed by ?glinternet.
   #
   # Return:
   #   A vector in which each value represents the number of factor levels for 
@@ -238,8 +238,8 @@ NumericFactorCodedMatrix <- function(datafr) {
   # as numeric. Returned value is suitable for ?glinternet.
   #
   # Args: 
-  #   datafr: A smart meter reading data.frame that has been trimmed and is ready 
-  #       for conversion to a matrix processed by ?glinternet.
+  #   datafr: A smart meter reading data.frame that has been trimmed and is 
+  #       ready for conversion to a matrix processed by ?glinternet.
   #
   # Return:
   #   The data.frame re-coded as a numeric matrix.
@@ -273,16 +273,18 @@ OrderFactors <- function(datafr) {
   datafr$weekend <- factor(datafr$weekend, c("FALSE", "TRUE"))
   datafr$holiday <- factor(datafr$holiday, c("FALSE", "TRUE"))
   datafr$tou_active <- factor(datafr$tou_active, c("FALSE", "TRUE"))
-  datafr$dayname <- factor(datafr$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", 
-                                     "Sat"))
-  datafr$month <- factor(datafr$month, c("m1", "m2", "m3", "m4", "m5", "m6", "m7", 
-                                 "m8", "m9", "m10", "m11", "m12"))
+  datafr$dayname <- factor(datafr$dayname, c("Sun", "Mon", "Tue", "Wed", "Thu", 
+                                             "Fri", "Sat"))
+  datafr$month <- factor(datafr$month, c("m1", "m2", "m3", "m4", "m5", "m6", 
+                                         "m7", "m8", "m9", "m10", "m11", "m12"))
   datafr$hrstr <- factor(datafr$hrstr, 
-                     c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
-                       "h9", "h10", "h11", "h12", "h13", "h14", "h15", "h16", 
-                       "h17", "h18", "h19", "h20", "h21", "h22", "h23"))
-
-  datafr$price <- factor(datafr$price, c("flat", "off_peak", "mid_peak", "on_peak"))
+                         c("h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", 
+                           "h9", "h10", "h11", "h12", "h13", "h14", "h15", 
+                           "h16", "h17", "h18", "h19", "h20", "h21", "h22", 
+                           "h23"))
+  
+  datafr$price <- factor(datafr$price, c("flat", "off_peak", "mid_peak", 
+                                         "on_peak"))
   datafr$weather_reduced <- factor(datafr$weather_reduced)
   
   if("severe_weather" %in% colnames(datafr)) {
@@ -292,7 +294,7 @@ OrderFactors <- function(datafr) {
   if("working_day" %in% colnames(datafr)) {
     datafr$working_day <- factor(datafr$working_day, c("FALSE", "TRUE"))
   }
-    
+  
   return(datafr)
 }
 
@@ -312,7 +314,7 @@ ReduceWeatherCoarseTerms <- function(vec){
     if (is.na(vec[i])) {
       weather_reduced[i] <- "unknown"
     } else if (grepl("Hail|Pellet", vec[i])) {
-      # "Pellets" to catch "Snow Pellets", "Ice Pellets", and "Ice Pellet Showers"
+      # "Pellets" catches "Snow Pellets", "Ice Pellets" and "Ice Pellet Showers"
       weather_reduced[i] <- "hail"
     } else if (grepl("Freezing", vec[i])) {
       # "Freezing" to catch "Freezing Rain", "Freezing Drizzle", 
@@ -350,8 +352,8 @@ ReduceWeatherCoarseTerms <- function(vec){
 }
 
 ReduceSevereWeather <- function(vec){
-  # Reduce the ~64 distinct combinations of weather terms to a boolean indicating 
-  # whether there is severe weather in the area or not.
+  # Reduce the ~64 distinct combinations of weather terms to a boolean 
+  # indicating whether there is severe weather in the area or not.
   #
   # Args:
   #   vec: A vector with character values (ie. weather_desc)
