@@ -17,3 +17,6 @@ results/
 # RStudio files
 .Rproj.user/
 .Rproj.user
+
+# Ignore operating system backup files
+*.*~
